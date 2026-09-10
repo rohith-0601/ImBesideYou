@@ -1,0 +1,21 @@
+# Raw provided data — large (12GB across screenshots), and it's the client's
+# original export, not something we generate. Kept out of git history; noted
+# in README/work_log instead. Re-obtainable from the original Drive export.
+dataset_a/
+dataset_a 2/
+dataset_a 3/
+dataset_a 4/
+dataset_a 5/
+dataset_b/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# OS / editor
+.DS_Store
+
+# Large derived artifacts we don't want bloating history (regenerable from src/)
+*.png
+cache/
