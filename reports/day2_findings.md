@@ -83,9 +83,11 @@ Two signals were rejected, both on measurement rather than taste:
   therefore kept for sub-counting inside `fin_invoice_matching` on Day 3, not
   used as the segmentation unit.
 
-**Result: 162 segments across 15 sessions, zero overlap, 95.6% mean coverage
-of session wall-clock** (93.4–99.4%). Day 1's naive case spans summed to
-1.45×–3.32× wall-clock; that failure mode is now measurably gone.
+**Result: 165 episodes → 601 case executions across 15 sessions, zero
+overlap, 95.4% mean coverage of session wall-clock** (93.4–97.4%). Day 1's
+naive case spans summed to 1.45×–3.32× wall-clock; that failure mode is
+measurably gone. See §8 for why executions, not episodes, are the
+deliverable.
 
 ## 4. Signal availability forced a two-source design
 
@@ -98,11 +100,16 @@ session including that one, and agrees with the URL port **96.5%** of the
 time (n=9,362). It gives the system but never the route.
 
 Design consequence: the (port, route) pair is the primary label source and is
-forward-filled **atomically**; `window_title` validates it and labels the
-L3-less session at system-only granularity, emitted honestly as
-`hr_payroll_unresolved` etc. rather than inventing a route. Those 10 segments
-are excluded from the `p_code` score and flagged in the deliverable's
-limitations.
+forward-filled **atomically**; `window_title` validates it.
+
+For the L3-less session, the route is recovered from the **process code the
+portal stamps into clicked row names** — `p_code` needs no browser extension,
+and the worker stays on a screen between clicks, so it forward-fills
+cleanly. That resolved the session completely: all 12 processes, no
+`*_unresolved` labels anywhere in the deliverable. `P8` is deliberately
+excluded from the recovery map as the one ambiguous code, so a stretch
+resolvable only by `P8` would still fall back to system granularity rather
+than being guessed.
 
 ## 5. Two bugs worth recording
 
@@ -169,3 +176,80 @@ non-overlapping, cover 95.6% of wall-clock, agree 98.6% with an independent
 process code, use one label per process, and survive visual inspection at
 sampled boundaries. That is materially weaker than an F1 against `gt.jsonl`
 and should not be presented as equivalent.
+
+## 8. Optimisation: episodes are not executions
+
+The first Day 2 pipeline emitted 162 **episodes** — contiguous stretches of
+work in one process context. That under-segments, and the data says so
+plainly: those episodes contain **588 case-completion markers**, a median of
+3–4 each. An invoice clerk works `INV-2026-7345`, then `-7347`, then `-7348`,
+never leaving the screen. One episode, three executions.
+
+The README asks to segment into "individual executions of business
+processes", and dataset A's `gt_manifest.json` fixes the granularity:
+`executions[]` is "one entry per execution of that process", each carrying its
+own `case_id`. So episodes were roughly 3.6× too coarse.
+
+**The marker.** Every process closes each case by writing a completion comment
+that names it:
+
+```
+請求書照合完了。INV-2026-7347　金額：1,832,962円。差異なし承認。
+給与変更登録。変更種別：残業手当調整。適用日：2026-07-02。確認完了。
+発注管理処理。スポット発注：梱包材料　数量 164　合計 6,314,164円　通常。発注書確認・登録完了。
+在庫調整登録。品番：BATCH-W2　品名：電源モジュールB　調整数：+155個。
+```
+
+Detection is **structural, not keyword-based**, and that choice was forced by
+a failure: an early version keyed on 完了|承認|済み and found only 8 markers
+for `inv_stock_adjustment` instead of 82, because stock adjustments are logged
+as memos with no completion verb. The rule that works is "a field value long
+enough to be a comment, that is not the field's placeholder" — placeholders
+are identifiable because they all end in an ellipsis
+(`処理内容・確認コメントを入力してください…`).
+
+**Why deduplicating by text is safe.** `target_field.value` on a keystroke
+carries the field's *current* value, so progressive typing would emit partial
+prefixes and inflate the count. Checked before relying on it: across a full
+session's 86 long values, **zero** are a strict prefix of a nearby later
+value. The comments are pasted, not typed character-by-character — which is
+also why `clipboard_change` events accompany them.
+
+The split conserves the episode's span exactly, so coverage and
+non-overlap are unchanged.
+
+**Result: 601 executions, 12 labels, zero overlap, 95.4% coverage, 97.8%
+`p_code` agreement** (583/596).
+
+### The evaluation got harder, which is the point
+
+Execution-boundary alignment with navigation events fell from 96.0% (episode
+level) to **75.1%**, and that drop is the desired outcome. Most case
+boundaries occur *inside* one screen, where there is no navigation to align
+with — so a high score there would have meant the executions were not being
+split at all. `evaluate.py` now reports both granularities and says which
+number means what, because quoting only the flattering one would misrepresent
+what was tested.
+
+## 9. Label correction: 発注管理, not bank reconciliation
+
+`5133|#/resident-tax` was labelled `fin_bank_reconciliation` on the strength
+of the vendor names on screen (関西物流サービス, 北陸部品工業株式会社). The
+completion comments overturn that:
+
+```
+発注管理処理。スポット発注：梱包材料　数量 164　合計 6,314,164円　通常。発注書確認・登録完了。
+発注管理処理。年間契約：サーバー保守部品　数量 425　合計 19,877,675円　通常。発注書確認・登録完了。
+```
+
+This is **発注管理 (purchase order management)** — spot orders and annual
+contracts, with quantities and totals. It corroborates independently: the
+Finance sidebar in the screenshots lists 請求書承認・経費精算, 経費承認（管理職）,
+支払処理, 予算差異分析 and 発注管理, and 発注管理 was the only item with no
+route assigned. Renamed `fin_purchase_order_management`.
+
+Worth noting how the error happened: vendor names are consistent with both
+readings, and I picked the wrong one from a plausible-looking partial signal.
+The completion comments are the process naming *itself*, which makes them
+better evidence than the row contents. Only reachable after building the
+execution splitter — the optimisation paid for itself twice.

@@ -42,9 +42,14 @@ names** — so `#/payroll-items` was merging invoice approval, HR payroll and
 inventory work. Rebuilt the taxonomy on (system, route): **12 resolvable
 processes**, each named from its own screen's Japanese vocabulary.
 
-**162 segments, zero overlap, 95.6% wall-clock coverage, 98.6% agreement
-with an independent process code** stamped into the portal's UIA row names.
-Deliverable written to `segments/segments.jsonl` and schema-validated.
+Then split episodes into individual case executions at the completion comment
+each process writes per case — episodes were ~3.6x too coarse for the
+README's "individual executions". **165 episodes → 601 executions, zero
+overlap, 95.4% wall-clock coverage, 97.8% agreement with an independent
+process code** stamped into the portal's UIA row names. The one session with
+no L3 events was resolved via that same process code, so no `*_unresolved`
+labels remain. Deliverable written to `segments/segments.jsonl` and
+schema-validated.
 
 Also recorded: boundary alignment (99.3%) is near-tautological and is
 reported as a regression guard, not as accuracy. The screenshot check was the
@@ -66,9 +71,11 @@ first version was itself buggy. See
 
 Three leads carried from Day 2, to be tested rather than assumed:
 
-- `fin_invoice_matching` is the largest process by time (1,238s over 16
-  segments) **and** the only one with genuine per-case IDs, so its volume can
-  be counted exactly instead of estimated.
+- Execution counts are now exact per process, and every execution carries the
+  completion comment naming its case — so Step 2's "how often, how long, how
+  many variants" is answerable from `segments.jsonl` plus those comments,
+  which encode the variant directly (`変更種別：昇給` vs `役職手当廃止`,
+  `スポット発注` vs `年間契約`).
 - Word use is concentrated, not diffuse: `inv_contract_management` is 1,087
   Word events, `fin_payment_processing` 648. The contract screen displays
   `参照：参照書類：<file>.docx` — the portal *names the document the worker
@@ -142,10 +149,10 @@ process chosen on Day 3, not precede it.
   (materialised, and fixed on Day 2 — but the cause was route/system
   conflation, not the list-view rendering Day 1 suspected). Volume feeds
   straight into prioritisation, so this had to be right before Day 3.
-- **One session cannot be resolved below system granularity.**
-  `ses_20260701-192455-NEELA9BAF` recorded no L3 events, so 10 of 162
-  segments carry `*_unresolved` labels. Day 3 process counts should either
-  exclude it or state that it contributes system-level time only.
+- **One session had no L3 events** (`ses_20260701-192455-NEELA9BAF`).
+  Resolved on Day 2 via the portal's `p_code`, so it now carries real process
+  labels — but its routes are inferred from a different signal than the other
+  14 sessions, which is worth a sentence in the report.
 - **Small absolute data volume.** 176 minutes of wall-clock across 15
   sessions. The README says to compare processes against each other rather
   than trusting absolute figures — so the report must present relative

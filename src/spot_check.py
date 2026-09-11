@@ -103,10 +103,16 @@ def boundary_shots(segs: pd.DataFrame, events: pd.DataFrame,
         sidx = idx[idx.session_id == sid].sort_values("timestamp_ms")
         if sidx.empty or len(g) < 2:
             continue
-        # Sample boundaries spread across the session.
-        picks = range(1, len(g))
-        step = max(1, len(g) // max(1, per_session))
-        for i in list(picks)[::step][:per_session]:
+        # Only sample boundaries where the *label* changes. Within-process
+        # case boundaries are real but not visually checkable — the screen
+        # looks the same either side, only the selected row differs — so
+        # they would make the check look like it was failing when it wasn't.
+        picks = [i for i in range(1, len(g))
+                 if g.loc[i, "label"] != g.loc[i - 1, "label"]]
+        if not picks:
+            continue
+        step = max(1, len(picks) // max(1, per_session))
+        for i in picks[::step][:per_session]:
             t = g.loc[i, "start_ms"]
             before = sidx[sidx.timestamp_ms <= t - LEAD_S * 1000].tail(1)
             after = sidx[sidx.timestamp_ms >= t + LAG_S * 1000].head(1)
@@ -151,7 +157,10 @@ def main() -> None:
                 "side. Open the two images: the screen should show a "
                 "different system or screen after the boundary than before.\n\n")
         f.write(f"Sampled {len(bs)} boundaries "
-                f"({args.per_session} per session).\n\n")
+                f"({args.per_session} per session). Only boundaries where the "
+                f"process label changes are sampled — within-process case "
+                f"boundaries are real but look identical on screen, since "
+                f"only the selected table row differs.\n\n")
         f.write("| session | at | before | after | shot before | shot after |\n")
         f.write("|---|---|---|---|---|---|\n")
         for r in bs.itertuples():

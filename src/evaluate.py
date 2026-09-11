@@ -28,6 +28,13 @@ running.
 `score_against_gt` is written but unused: if dataset A's JSON parts turn up,
 it computes boundary precision/recall directly, so the harness does not need
 rewriting.
+
+Both granularities are reported, because they answer different questions. The
+*episode* view (process switches) is what check 3 is meaningful for. The
+*execution* view (individual cases) is the deliverable, and its boundaries sit
+at case completions rather than navigations — so its alignment score is
+*expected* to be lower, and a high one would mean the executions were not
+actually being split.
 """
 
 from __future__ import annotations
@@ -181,7 +188,18 @@ if __name__ == "__main__":
     from segment import segment
 
     ev = annotate(load_events(DATASET_B_ROOTS))
+    episodes = segment(ev, split_executions=False)
     segs = segment(ev)
+
+    print(f"\n=== 0. granularity ===")
+    print(f"process episodes      : {len(episodes)}")
+    print(f"case executions       : {len(segs)}  <- the deliverable")
+    per_ep = len(segs) / len(episodes)
+    print(f"executions per episode: {per_ep:.1f} mean")
+    ep_align = check_boundary_alignment(episodes, ev)
+    print(f"\nepisode boundaries aligned with navigation/app-switch: "
+          f"{ep_align['aligned']}/{ep_align['boundaries']} "
+          f"({ep_align['aligned_pct']}%)  [regression guard; near-tautological]")
 
     print("\n=== 1. tiling / overlap / coverage ===")
     t = check_tiling(segs, ev)
@@ -206,8 +224,12 @@ if __name__ == "__main__":
 
     print("\n=== 3. boundary alignment with real navigation/app-switch ===")
     b = check_boundary_alignment(segs, ev)
-    print(f"{b['aligned']} / {b['boundaries']} boundaries within "
+    print(f"execution boundaries: {b['aligned']} / {b['boundaries']} within "
           f"{b['window_s']}s of a navigation or app switch ({b['aligned_pct']}%)")
+    print("  Expected to be well below the episode figure: most execution")
+    print("  boundaries are case completions inside one screen, where there")
+    print("  is no navigation to align with. A high number here would mean")
+    print("  the executions were not being split at all.")
 
     print("\n=== 4. label stability (one label <-> one (system, route)) ===")
     print(check_label_stability(ev).to_string(index=False))

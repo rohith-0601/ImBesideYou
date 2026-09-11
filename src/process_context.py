@@ -93,12 +93,37 @@ PROCESS_LABELS = {
     ("5133", "#/payroll-items"):      "fin_invoice_matching",
     ("5133", "#/onboarding"):         "fin_payment_processing",
     ("5133", "#/leave-applications"): "fin_expense_approval",
-    ("5133", "#/resident-tax"):       "fin_bank_reconciliation",
+    # Named 発注管理 (purchase order management), not bank reconciliation as
+    # first guessed from the vendor names on screen. The completion comments
+    # settle it: 発注管理処理。スポット発注：梱包材料 数量 164 合計
+    # 6,314,164円 通常。発注書確認・登録完了。 — and 発注管理 is the last
+    # unmapped item in the Finance sidebar (請求書承認・経費精算,
+    # 経費承認（管理職）, 支払処理, 予算差異分析, 発注管理).
+    ("5133", "#/resident-tax"):       "fin_purchase_order_management",
     ("5133", "#/social-insurance"):   "fin_budget_variance_analysis",
     # --- 受発注在庫管理システム ---
     ("5134", "#/leave-applications"): "inv_contract_management",
     ("5134", "#/payroll-items"):      "inv_stock_adjustment",
     ("5134", "#/social-insurance"):   "inv_it_request_processing",
+}
+
+# p_code -> label, used only to recover a route when no URL was ever
+# recorded. Derived from the measured 1:1 mapping (11 of 12 codes sit in
+# exactly one (system, route) at 82-100%). P8 is deliberately absent: it is
+# the one ambiguous code, observed across three processes, so a session
+# resolved only by P8 stays honestly unresolved.
+PCODE_LABELS = {
+    "P2":  "hr_leave_application",
+    "P3":  "hr_onboarding_verification",
+    "P4":  "hr_expense_and_payroll_change",
+    "P5":  "hr_welfare_application",
+    "P6":  "fin_invoice_matching",
+    "P7":  "fin_payment_processing",
+    "P9":  "fin_expense_approval",
+    "P10": "fin_purchase_order_management",
+    "P11": "inv_stock_adjustment",
+    "P12": "inv_contract_management",
+    "P13": "inv_it_request_processing",
 }
 
 # Dashboard is a landing/overview screen, not a unit of work. Kept out of the
@@ -217,17 +242,37 @@ def annotate(df: pd.DataFrame) -> pd.DataFrame:
 
     df["process_label"] = df["pair_ff"].map(_label)
 
-    # Sessions with no L3 at all have no URL ever, so no route is knowable.
-    # Fall back to system-only granularity from the window title, which is
-    # honest about the coarser resolution instead of inventing a route.
-    sys_ff = df.groupby("session_id", sort=False)["system_title"].ffill()
-    sys_ff = df.groupby("session_id", sort=False)["system_title"].bfill().fillna(sys_ff)
+    # Sessions with no L3 at all have no URL ever, so no route is knowable
+    # from the browser. Recover it from the process code the portal stamps
+    # into clicked row names, which needs no extension: `p_code` is carried
+    # forward between clicks, since the worker stays on a screen between
+    # interactions with it.
     no_url = ~df.groupby("session_id", sort=False)["pair"].transform(
         lambda s: s.notna().any()
     )
-    df.loc[no_url, "process_label"] = sys_ff[no_url].map(
-        lambda s: f"{s}_unresolved" if isinstance(s, str) else None
-    )
+    if no_url.any():
+        # Keep only codes with an unambiguous mapping, then carry them
+        # across the events between clicks.
+        df["_pc"] = df["p_code"].where(df["p_code"].isin(PCODE_LABELS))
+        pc_filled = df.groupby("session_id", sort=False)["_pc"].ffill()
+        pc_filled = pc_filled.fillna(
+            df.groupby("session_id", sort=False)["_pc"].bfill()
+        )
+        recovered = pc_filled.map(PCODE_LABELS)
+        df.loc[no_url, "process_label"] = recovered[no_url]
+        df = df.drop(columns=["_pc"])
+
+        # Anything the process code could not resolve (no usable p_code
+        # nearby, or only the ambiguous P8) falls back to system granularity
+        # and is labelled honestly rather than guessed.
+        sys_ff = df.groupby("session_id", sort=False)["system_title"].ffill()
+        sys_ff = sys_ff.fillna(
+            df.groupby("session_id", sort=False)["system_title"].bfill()
+        )
+        still = no_url & df["process_label"].isna()
+        df.loc[still, "process_label"] = sys_ff[still].map(
+            lambda s: f"{s}_unresolved" if isinstance(s, str) else None
+        )
     df["system"] = df["system_title"].fillna(df["system_url"])
     df["system"] = df.groupby("session_id", sort=False)["system"].ffill()
     df["system"] = df.groupby("session_id", sort=False)["system"].bfill()

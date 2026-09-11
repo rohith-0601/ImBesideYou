@@ -259,16 +259,76 @@ text (契約管理, 予算差異分析, IT申請, 保守委託契約（更新）
 translated with the model's help. All three bugs above were found by running
 the code and disbelieving the output, not by review.
 
+### Optimisation pass (same day)
+
+Having got a working pipeline, I went back over it looking for real defects
+rather than polish. Three, in increasing order of how much they mattered.
+
+**1. Episodes were not executions — a ~3.6x under-segmentation.** My segments
+were contiguous stretches of work in one process context. But an invoice
+clerk works `INV-2026-7345`, then `-7347`, then `-7348` without leaving the
+screen: one episode, three executions. I counted the completion comments
+inside my episodes and found **588 markers across 162 episodes**, a median of
+3–4 each. The README asks for "individual executions", and dataset A's
+`gt_manifest.json` settles the granularity — `executions[]` is "one entry per
+execution", each with its own `case_id`. So I was emitting the wrong unit.
+
+Fixed by splitting each episode at its completion markers: **165 episodes →
+601 executions**, with coverage and non-overlap unchanged because the split
+conserves each episode's span.
+
+Two things I had to check before trusting it. First, my initial detector
+keyed on 完了|承認|済み and found only 8 markers for `inv_stock_adjustment`
+instead of 82 — stock adjustments are logged as memos with no completion
+verb. Replaced keyword matching with a structural rule (a long field value
+that isn't the placeholder; placeholders all end in `…`). Second,
+`target_field.value` on keystrokes carries the field's *running* value, so
+progressive typing would have inflated the count with partial prefixes — I
+checked, and across a session's 86 long values **zero** were a prefix of a
+later one. The comments are pasted, not typed, which is why
+`clipboard_change` accompanies them. Had that check failed, dedupe-by-text
+would have been badly wrong.
+
+**2. The L3-less session no longer needs `*_unresolved`.** I'd shipped 10
+segments labelled `hr_payroll_unresolved` etc. because that session has no
+URL to derive a route from. But `p_code` is stamped into clicked row names by
+the portal, needs no browser extension, and forward-fills cleanly since the
+worker stays on a screen between clicks. Recovering the route from it
+resolved the session completely — all 12 processes, no `*_unresolved`
+anywhere in the deliverable. I left `P8` out of the recovery map (it's the one
+ambiguous code) so an unresolvable stretch would still degrade honestly
+rather than be guessed.
+
+**3. `fin_bank_reconciliation` was the wrong name.** I'd inferred it from the
+vendor names on screen. The completion comments say otherwise:
+`発注管理処理。スポット発注：梱包材料　数量 164　合計 6,314,164円　通常。発注書確認・登録完了。`
+— this is **発注管理, purchase order management**. It corroborates: the
+Finance sidebar lists 請求書承認・経費精算, 経費承認（管理職）, 支払処理,
+予算差異分析, 発注管理, and 発注管理 was the only item with no route assigned.
+Renamed. The lesson is that vendor names were consistent with both readings,
+and the completion comment is the process *naming itself* — better evidence
+than row contents. I could only see it after building the execution splitter,
+so that optimisation paid for itself twice.
+
+**What the optimisation cost me, honestly:** execution-boundary alignment
+with navigation events is 75.1%, down from 96.0% at episode level. That fall
+is correct — most case boundaries happen inside one screen with no navigation
+to align against, so a high score would have proved the executions weren't
+being split. But it does mean the reassuring number got smaller, and
+`evaluate.py` now reports both granularities and states which is which
+instead of quoting the better one.
+
 ### Artifacts
 
 | file | what it is |
 |---|---|
-| `src/process_context.py` | per-event system/route/label resolution, `p_code` extraction |
+| `src/process_context.py` | per-event system/route/label resolution, `p_code` extraction and route recovery |
+| `src/executions.py` | per-case completion-marker detection and episode splitting |
 | `src/segment.py` | episode segmentation + `segments.jsonl` writer |
-| `src/evaluate.py` | four ground-truth-free checks, plus a dormant GT scorer |
+| `src/evaluate.py` | four ground-truth-free checks at both granularities, plus a dormant GT scorer |
 | `src/spot_check.py` | resolves screenshots either side of predicted boundaries |
 | `src/report_day2.py` | regenerates `day2_segmentation.md` from the pipeline |
-| `segments/segments.jsonl` | **the Step 1 deliverable** — 162 segments, 15 sessions |
+| `segments/segments.jsonl` | **the Step 1 deliverable** — 601 case executions, 15 sessions, 12 labels |
 | `reports/day2_segmentation.md` | generated statistics and the taxonomy evidence |
 | `reports/day2_findings.md` | curated findings |
 | `reports/day2_boundary_spotcheck.md` | 30 sampled boundaries with image paths |

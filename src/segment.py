@@ -42,6 +42,14 @@ least `MIN_DURATION_S` of wall-clock. Runs that fail are absorbed into the
 neighbouring segment rather than discarded, so no time goes missing, and
 adjacent runs that end up with the same label are then coalesced.
 
+Episodes are then split into per-case **executions** by `executions.py`,
+because an episode routinely contains several cases worked back-to-back
+without leaving the screen (measured: a median of 3-4 completion markers per
+episode, 588 across 162 episodes). The README asks for "individual executions
+of business processes", and dataset A's `gt_manifest.json` confirms the
+granularity — `executions[]` is "one entry per execution of that process".
+Emitting episodes alone under-segments by roughly 3x.
+
 Output is one non-overlapping segment per line, in the schema the README
 specifies for `segments.jsonl`.
 """
@@ -54,6 +62,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from executions import completion_markers, split_segment
 from process_context import annotate
 
 # Thresholds. Chosen from the measured run-length distribution: genuine
@@ -145,17 +154,28 @@ def _absorb(runs: list[dict]) -> list[dict]:
     return out
 
 
-def segment(events: pd.DataFrame) -> pd.DataFrame:
-    """Segment every session in `events`. Returns one row per segment."""
+def segment(events: pd.DataFrame, split_executions: bool = True) -> pd.DataFrame:
+    """Segment every session in `events`. Returns one row per segment.
+
+    With `split_executions` (the default) each process episode is further
+    split into individual case executions at its completion markers. Pass
+    False to get the coarser episode view, which is what the internal
+    consistency checks in `evaluate.py` are calibrated against.
+    """
     if "process_label" not in events.columns:
         events = annotate(events)
+
+    markers = completion_markers(events) if split_executions else None
 
     rows = []
     for sid, g in events.groupby("session_id", sort=True):
         g = g.sort_values("timestamp_ms")
         for seg in _absorb(_runs(g)):
             seg["session_id"] = sid
-            rows.append(seg)
+            if markers is not None:
+                rows.extend(split_segment(seg, markers))
+            else:
+                rows.append(seg)
 
     df = pd.DataFrame(rows)
     if df.empty:
@@ -186,11 +206,14 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", choices=["a", "b"], default="b")
     ap.add_argument("--out", default="segments/segments.jsonl")
+    ap.add_argument("--episodes-only", action="store_true",
+                    help="emit process episodes without splitting into "
+                         "per-case executions")
     args = ap.parse_args()
 
     roots = DATASET_B_ROOTS if args.dataset == "b" else DATASET_A_ROOTS
     events = annotate(load_events(roots))
-    segs = segment(events)
+    segs = segment(events, split_executions=not args.episodes_only)
 
     out = Path(args.out)
     write_segments_jsonl(segs, out)
