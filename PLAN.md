@@ -26,32 +26,56 @@ problems it still has (span overlap, list-view false positives) measured and
 written down. Dataset A confirmed unusable — no ground truth anywhere.
 See [`reports/day1_findings.md`](reports/day1_findings.md).
 
-## Day 2 — Step 1: segmentation algorithm → `segments.jsonl`
+## Day 2 — Step 1: segmentation algorithm → `segments.jsonl` ✅
 
-- Separate "case is visible on screen" from "case is being worked" — the
-  list-view false-positive problem that currently inflates `payroll_change`.
+- Separate "case is visible on screen" from "case is being worked".
 - Reconcile overlapping case spans into a coherent, non-overlapping timeline
   per session, allowing for genuine interleaving (suspend/resume).
 - Emit `segments.jsonl` for dataset B in the required schema.
-- **Validation without ground truth:** since dataset A's `gt.jsonl` is gone,
-  substitute (a) screenshot spot-checks at predicted boundaries — we have
-  4,746 dataset B screenshots and can literally look at what was on screen,
-  (b) internal consistency checks (segments tile the session without
-  overlap; label matches the route actually in the foreground), and (c) a
-  hand-labelled subset of 2–3 sessions to score against. State plainly in
-  the report that this is weaker evidence than measured accuracy on A, and
-  why that wasn't available.
+- Validation without ground truth: screenshot spot-checks at predicted
+  boundaries, plus internal consistency checks.
+
+**Outcome:** the planned list-view fix turned out to address a non-problem.
+The actual defect was that Day 1 labelled processes from the SPA route alone,
+but dataset B holds **three business systems that reuse the same route
+names** — so `#/payroll-items` was merging invoice approval, HR payroll and
+inventory work. Rebuilt the taxonomy on (system, route): **12 resolvable
+processes**, each named from its own screen's Japanese vocabulary.
+
+**162 segments, zero overlap, 95.6% wall-clock coverage, 98.6% agreement
+with an independent process code** stamped into the portal's UIA row names.
+Deliverable written to `segments/segments.jsonl` and schema-validated.
+
+Also recorded: boundary alignment (99.3%) is near-tautological and is
+reported as a regression guard, not as accuracy. The screenshot check was the
+only one that tested something the algorithm didn't already assume — and its
+first version was itself buggy. See
+[`reports/day2_findings.md`](reports/day2_findings.md).
 
 ## Day 3 — Step 2: process analysis and ROI prioritisation
 
 - Per process: execution count, time consumed, operators involved, variance
-  between executions (the "different handling patterns" question).
+  between executions (the "different handling patterns" question). All four
+  are now available per segment.
 - Build the prioritisation on explicit criteria — volume × time × rule
   determinism ÷ implementation difficulty — and show the working, so the
   ordering is arguable rather than asserted.
 - Assess feasibility per candidate: data access route, branch count,
   governance constraints, and what could only surface during build.
 - **Decide the Step 3 target and scope, and write down what's deferred.**
+
+Three leads carried from Day 2, to be tested rather than assumed:
+
+- `fin_invoice_matching` is the largest process by time (1,238s over 16
+  segments) **and** the only one with genuine per-case IDs, so its volume can
+  be counted exactly instead of estimated.
+- Word use is concentrated, not diffuse: `inv_contract_management` is 1,087
+  Word events, `fin_payment_processing` 648. The contract screen displays
+  `参照：参照書類：<file>.docx` — the portal *names the document the worker
+  must open*, which is a far more automatable finding than Day 1's generic
+  "Word is the second-heaviest app".
+- `fin_budget_variance_analysis` is 497 Excel events out of 714 — nearly pure
+  spreadsheet work, a different automation shape from the portal flows.
 
 ## Day 4 — Step 3 foundation: web app scaffold + the hard integration
 
@@ -114,9 +138,14 @@ process chosen on Day 3, not precede it.
   hand-labelled subset, and explicit honesty about the weaker evidence.
   If the missing dataset A JSON parts turn up mid-week, Day 2's evaluation
   harness is written so it can score against `gt.jsonl` immediately.
-- **Over-counted `payroll_change` would mis-rank the automation candidates.**
-  Volume feeds directly into prioritisation, so the Day 2 false-positive fix
-  gates the credibility of Day 3's recommendation.
+- **Over-counted `payroll_change` would mis-rank the automation candidates**
+  (materialised, and fixed on Day 2 — but the cause was route/system
+  conflation, not the list-view rendering Day 1 suspected). Volume feeds
+  straight into prioritisation, so this had to be right before Day 3.
+- **One session cannot be resolved below system granularity.**
+  `ses_20260701-192455-NEELA9BAF` recorded no L3 events, so 10 of 162
+  segments carry `*_unresolved` labels. Day 3 process counts should either
+  exclude it or state that it contributes system-level time only.
 - **Small absolute data volume.** 176 minutes of wall-clock across 15
   sessions. The README says to compare processes against each other rather
   than trusting absolute figures — so the report must present relative

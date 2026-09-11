@@ -1,4 +1,34 @@
 """
+Case-ID extraction.
+
+>>> SUPERSEDED IN PART — read this before using it. <<<
+Day 2 disproved two claims made below:
+
+1. The ``P<n>-<8 digits>-<3 digits>`` strings are **not** case IDs. They are
+   UIA ``DataItem`` row names shaped ``P<process>-<batch>-<row>``: the
+   8-digit body is constant within a session, and ``P<n>`` maps 1:1 onto a
+   (system, route) process. A screenshot of the Finance invoice table shows
+   its ``ID`` column listing ``P6-07010448-001``…``-012``, one per table row.
+   So the "170 distinct cases" figure below conflates 12 processes with their
+   rows. `process_context.p_code_of` extracts the process code properly, and
+   `process_context.PROCESS_LABELS` is the real taxonomy.
+2. ``ROUTE_LABELS`` below is wrong, because dataset B contains three business
+   systems that reuse the same route names. Route alone cannot identify a
+   process. See `process_context.py` and `reports/day2_findings.md`.
+
+What remains valid and still used: the ``INV-<year>-<4 digits>`` family are
+genuine per-item case IDs (72 of them, embedded in Japanese text such as
+``請求書承認 INV-2026-7344``), and `text_surfaces` is the correct list of
+payload paths where business text survives redaction. Day 3 uses both for
+per-case counting inside `fin_invoice_matching`.
+
+Kept in the repo rather than deleted because the Day 1 → Day 2 correction is
+part of the work record.
+
+---
+
+Original Day 1 docstring follows.
+
 Case-ID extraction — the anchor for Step 1 segmentation.
 
 Day 1 finding: inter-event idle gaps are useless as boundary signals in this

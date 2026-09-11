@@ -124,3 +124,151 @@ not by inspection. Japanese screen text (`請求書照合完了`, `年次有給�
 | `reports/day1_eda.md` | machine-generated statistics |
 | `reports/day1_findings.md` | curated findings and their consequences |
 | `PLAN.md` | 7-day plan and Step 3 form decision |
+
+---
+
+## Day 2
+
+**Goal:** turn Day 1's chosen signal into an actual segmentation algorithm and
+emit the `segments.jsonl` deliverable for dataset B.
+
+I expected to spend the day on the two problems Day 1 left open — span
+overlap and the `payroll_change` over-count. I spent most of it discovering
+that Day 1's process taxonomy was wrong, which changed what those problems
+even were.
+
+### What I did
+
+1. **Probed which surfaces the Day 1 case IDs actually came from**, expecting
+   to separate "case rendered on screen" from "case actively worked".
+2. **Dumped the raw strings behind the matches** when the surface split came
+   back 170/170 on interaction surfaces — which contradicted the list-view
+   hypothesis.
+3. **Traced the `P<n>-<digits>-<digits>` family** through element payloads,
+   session scoping, and eventually a screenshot.
+4. **Discovered the three-system structure** from `browser_navigation`
+   payloads, which carry `url` and `page_title` together.
+5. **Rebuilt the taxonomy** on (system, route) pairs, naming each process
+   from the Japanese vocabulary on its own screen (`src/process_context.py`).
+6. **Wrote the segmenter** (`src/segment.py`) — contiguous process-context
+   episodes with substantive-work gating and absorption of insubstantial runs.
+7. **Wrote the evaluation harness** (`src/evaluate.py`) — four internal
+   checks, plus a `score_against_gt` that stays unused until/unless dataset
+   A's JSON appears.
+8. **Wrote the screenshot spot-check** (`src/spot_check.py`) and actually
+   opened the images, which is where the interesting failure came from.
+9. **Generated the reports** (`src/report_day2.py`) so the numbers in
+   `day2_segmentation.md` are reproducible rather than pasted.
+
+### What I found
+
+- **There are three business systems, not one.** `5132` HR人事給与システム,
+  `5133` 財務会計システム, `5134` 受発注在庫管理システム — and they **reuse
+  the same route names**. `#/social-insurance` is welfare applications on HR,
+  budget variance analysis on Finance, and IT equipment requests on
+  Inventory. Route-only labelling had been merging unrelated work.
+- **That, not list-view rendering, was the `payroll_change` inflation.**
+  `#/payroll-items` exists on all three systems. Day 1's guess and the actual
+  cause were unrelated — a good argument for not having built on the guess.
+- **The `P<n>-…` strings are `P<process>-<batch>-<row>`**, not case IDs. The
+  body is session-constant; `P<n>` maps 1:1 onto (system, route). A
+  screenshot of the Finance invoice table confirmed it outright: the `ID`
+  column lists `P6-07010448-001`…`-012`, one per row, each paired with
+  `INV-2026-7344`…`-7355` in the 区分 column. Same case, two identifiers.
+- **Corrected taxonomy: 12 resolvable processes**, each name backed by its
+  screen's own vocabulary.
+- **162 segments, zero overlap, 95.6% coverage** (93.4–99.4%). Day 1's naive
+  spans summed to 1.45×–3.32× wall-clock; that's fixed.
+- **98.6% agreement with the independent `p_code`** (145/147 segments with
+  evidence). The 2 disagreements both involve `P8`, the one genuinely
+  ambiguous code.
+- **One session has no L3 events at all** (`…192455-NEELA9BAF`) — the browser
+  extension never connected, so `browser_url` is null for all 998 events.
+  `window_title` covers the system for 99.2% of its Edge events, so it is
+  segmented at system-only granularity and labelled `*_unresolved`.
+
+### What didn't work
+
+- **My Day 1 list-view hypothesis was wrong.** Surface attribution showed all
+  170 cases came from interaction surfaces (`target_element.name`,
+  `target_field.value`), none from screen-render text only. If I'd
+  implemented the "require interaction evidence" fix I planned, it would have
+  changed nothing, because presence-vs-interaction was never the problem.
+- **Independent forward-fill of `port` and `route` manufactured three phantom
+  processes.** A stale route from one system attached to a newly-focused
+  other system, producing `hr_resident_tax`, `inv_order_check`,
+  `inv_inventory_review`. They looked entirely plausible in the output table.
+  What exposed them was that they had **no `p_code` support and no Japanese
+  business vocabulary** — the corroborating-signal check, not inspection.
+  Fixed by filling the (port, route) pair atomically.
+- **`float('nan')` is truthy in Python.** My guard
+  `if p and r and r not in IGNORED_ROUTES` happily built a literal
+  `"nan|nan"` pair for 11,042 events, dropping label coverage to 45.2%. The
+  symptom looked like a taxonomy gap, not a type bug. `isinstance(x, str)`
+  fixed it; coverage went to 100%.
+- **My screenshot spot-check was broken, and it looked like the segmenter was
+  broken.** The first run appeared to show a false boundary — identical
+  Finance screens either side. Reading the raw events proved the boundary was
+  *real* (there's a `browser_navigation` to the HR system at that instant) and
+  the checker was at fault: a capture 0.1s after a navigation still shows the
+  old page, and `window_title` trails navigation by ~2.3s. Fixed with a
+  standoff (≥2s before, ≥4s after). Nearly cost me a correct algorithm.
+
+### What I concluded
+
+The segmentation model is process **episodes**: a contiguous stretch of work
+in one (system, route) context, with interleaving expressed as repeated
+episodes of the same label. This matches the GT schema's
+`process_suspended`/`process_resumed` shape, so it should be comparable to
+truth if truth ever arrives.
+
+On evaluation honesty: three of my four internal checks are worth something,
+but **boundary alignment (99.3%) is close to tautological** — segments are
+cut *because* of navigation events, so that number confirms the code does
+what it intends, not that the boundaries are right. I've written that caveat
+into the report rather than quoting the flattering number. The only check
+that tested something the algorithm didn't assume was looking at pixels.
+
+### Decisions taken
+
+- **Label from (system, route), cross-check with `p_code`** — never the
+  reverse. Using `p_code` as the label source would have destroyed the only
+  independent signal available.
+- **Name labels from screen vocabulary, not route strings.** The route names
+  are actively misleading here, so `5134|#/leave-applications` is
+  `inv_contract_management` (its sidebar says 契約管理), not anything to do
+  with leave.
+- **Emit `*_unresolved` for the L3-less session** rather than guessing a
+  route. Coarser but honest, and flagged in the deliverable's limitations.
+- **Keep case IDs for Day 3 sub-counting**, not for segmentation — they cover
+  1 process of 12.
+- **Thresholds deliberately loose** (`MIN_SUBSTANTIVE=3`,
+  `MIN_DURATION_S=2.0`). With no ground truth there is nothing to tune
+  against, so tight constants would be false precision.
+
+### Generative AI usage
+
+Claude Code (Opus 5) throughout. Most of the day was iterative probing —
+roughly a dozen throwaway scripts in the scratchpad testing one hypothesis
+each (which surfaces carry case IDs; is the `P` body session-scoped; does
+`window_title` agree with the URL port; is each `P<n>` confined to one
+route). The three-system discovery came from crosstabbing `page_title`
+against port in `browser_navigation` payloads, and the `P<n>` decomposition
+was settled by reading a screenshot rather than by more code. Japanese screen
+text (契約管理, 予算差異分析, IT申請, 保守委託契約（更新）, 福利厚生申請) was
+translated with the model's help. All three bugs above were found by running
+the code and disbelieving the output, not by review.
+
+### Artifacts
+
+| file | what it is |
+|---|---|
+| `src/process_context.py` | per-event system/route/label resolution, `p_code` extraction |
+| `src/segment.py` | episode segmentation + `segments.jsonl` writer |
+| `src/evaluate.py` | four ground-truth-free checks, plus a dormant GT scorer |
+| `src/spot_check.py` | resolves screenshots either side of predicted boundaries |
+| `src/report_day2.py` | regenerates `day2_segmentation.md` from the pipeline |
+| `segments/segments.jsonl` | **the Step 1 deliverable** — 162 segments, 15 sessions |
+| `reports/day2_segmentation.md` | generated statistics and the taxonomy evidence |
+| `reports/day2_findings.md` | curated findings |
+| `reports/day2_boundary_spotcheck.md` | 30 sampled boundaries with image paths |
