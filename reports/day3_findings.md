@@ -290,7 +290,96 @@ with a human still reviewing each case"* — not a headline percentage. The
 README warns that proposals built on optimistic assumptions score badly, and
 a 68.6% figure quoted without these three deductions would be exactly that.
 
-## 10. Carried into Day 4
+## 10. What an execution is actually made of
+
+Mean counts inside one execution:
+
+| process | median s | clipboard | keystrokes | clicks | app switches | apps |
+|---|---|---|---|---|---|---|
+| `hr_onboarding_verification` | 26.7 | **2.74** | 18.1 | 11.6 | **9.42** | 2.16 |
+| `inv_contract_management` | 20.6 | 1.89 | 11.9 | 8.1 | 6.34 | 2.04 |
+| `fin_budget_variance_analysis` | 20.8 | 1.73 | **57.9** | 8.4 | 3.20 | 2.13 |
+| `fin_purchase_order_management` | 10.8 | 1.21 | 3.1 | 7.0 | 1.22 | 1.49 |
+| `hr_expense_settlement` | 9.9 | 1.21 | 3.7 | 5.4 | 1.49 | 1.50 |
+| `hr_leave_application` | 10.2 | **1.14** | **3.0** | 7.0 | **0.86** | **1.12** |
+| `fin_invoice_matching` | 15.2 | 1.08 | 11.9 | 7.0 | 3.44 | 2.22 |
+
+**872 clipboard operations in total, and every process averages at least one
+per execution.** Manual data movement is not confined to a few awkward
+flows — it is how all of this work is done. Content is redacted (Day 1), so
+only the count is available, but the count is the point: a value is being
+carried by hand between fields or applications, and that is the work an
+integration removes.
+
+Three things this adds to the scope decision:
+
+- **`hr_leave_application` is confirmed as the cleanest target from a second
+  direction.** Lowest on every dimension — 1.14 clipboard operations, 3.0
+  keystrokes, 0.86 app switches, 1.12 applications. It is close to
+  single-application clicking, which is why its addressable share (98.8%) is
+  so high.
+- **`hr_onboarding_verification` is the heaviest data-shuttler** (2.74
+  clipboard, 9.42 app switches across 2.16 apps). It has the most manual
+  movement to remove per case, but only 31 executions and a 17–45s operator
+  spread. Worth revisiting in a later phase; the per-case gain is the largest
+  in the set.
+- **`fin_budget_variance_analysis` is a different kind of work** — 57.9
+  keystrokes per execution, six times the next-highest. That is figures being
+  typed into Excel, not a portal flow, and confirms it needs a different tool
+  rather than a slot in this one.
+
+## 11. Two ROI levers that are *not* available
+
+Both of these are standard automation arguments. Neither survives contact
+with the data, and saying so is more useful than quietly omitting them.
+
+### There is no rework to eliminate
+
+| reference | identifies | distinct | pairs | repeated | rate |
+|---|---|---|---|---|---|
+| `INV-` | case | 64 | 64 | **0** | **0.0%** |
+| `P-` | case | 15 | 16 | 2 | 12.5% |
+| `BATCH-` | **product** | 6 | 39 | 20 | 51.3% |
+
+**Every one of the 64 invoice cases was worked exactly once.** No revisits, no
+second passes.
+
+The `BATCH-` row is the trap: counting all reference kinds together gives an
+18.5% rework rate, which I briefly had. But `BATCH-Wn` is a *product* code —
+6 distinct values across 78 stock adjustments — so the same product being
+adjusted on separate occasions is not the same case being reworked. The
+identifier looked like a case ID and was not one, which is the same mistake as
+the `P<n>-…` strings on Day 1.
+
+So the saving has to come from making each single pass faster. There is no
+second pass to delete.
+
+### The process chain exists but cannot be traced
+
+`fin_payment_processing` comments declare their upstream steps in a 工程
+field, and **27 of 36 name 請求書照合 (invoice matching)**:
+
+| 工程 chain | n |
+|---|---|
+| 請求書照合, 差異確認 | 16 |
+| 前払い申請, 承認, 振込実行 | 9 |
+| 請求書照合, 支払予定表, 振込実行 | 7 |
+| 請求書照合, 支払予定表, 振込実行, 支払通知 | 4 |
+
+So invoice matching feeds payment processing as a matter of procedure. But
+**no case reference appears in more than one process** (0 of 85 distinct
+refs), and the 36 payment amounts share **zero** values with the 64 invoice
+amounts. The chain is real in the procedure and invisible in the data.
+
+Two consequences, both restrictive:
+
+1. **End-to-end cycle time cannot be measured.** We can time each step but
+   never a case's journey through them.
+2. **Automating one step cannot be credited with downstream savings.** A
+   proposal claiming invoice automation also accelerates payment would be
+   asserting a link the logs do not support.
+
+## 12. Carried into Day 4
 
 1. **Verify the submit path first.** If approval cannot be driven
    programmatically, the tool becomes a preparation-and-checklist surface

@@ -13,10 +13,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from analyze_day3 import (TARGET_PROCESSES, app_surface, build_executions,
-                          operator_spread, per_operator, per_process,
-                          residual_work, score, systems_per_process,
-                          variant_table)
+from analyze_day3 import (TARGET_PROCESSES, activity_profile, app_surface,
+                          build_executions, operator_spread, per_operator,
+                          per_process, residual_work, rework, score,
+                          systems_per_process, variant_table)
 from data_loader import DATASET_B_ROOTS, load_events
 from process_context import annotate
 from segment import segment
@@ -70,6 +70,8 @@ def main() -> None:
     ops = per_operator(ex)
     spread = operator_spread(ex)
     residual = residual_work(ev, ex, TARGET_PROCESSES)
+    activity = activity_profile(ev, ex)
+    rw = rework(ex)
 
     real = ranked[ranked.executions >= 5].copy()
 
@@ -142,7 +144,47 @@ def main() -> None:
           f"{r.slowest_median_s} | {r.spread_x}x |")
     A("")
 
-    A("## 4. Integration surface\n")
+    A("## 4. What an execution is made of\n")
+    A("Mean counts inside a single execution. `clipboard` is the one that "
+      "matters most: it is a value being carried by hand between fields or "
+      "applications, which is exactly the work an integration removes. "
+      "Content is redacted throughout, so only the count is available.\n")
+    A("| process | median s | clipboard | keystrokes | clicks | app switches | apps |")
+    A("|---|---|---|---|---|---|---|")
+    for r in activity.itertuples():
+        if r.label not in set(real.label_final):
+            continue
+        A(f"| `{r.label}` | {r.median_s} | {r.clipboard_per_exec} | "
+          f"{r.keystrokes_per_exec} | {r.clicks_per_exec} | "
+          f"{r.switches_per_exec} | {r.apps_per_exec} |")
+    A("")
+    A(f"Every process copies and pastes at least once per execution on "
+      f"average ({activity.clipboard_total.sum():.0f} clipboard operations "
+      f"in total). Manual data movement is universal here, not confined to "
+      f"a few awkward flows.\n")
+
+    A("## 4b. Is there rework to eliminate?\n")
+    A("\"The tool removes the second pass\" is a standard automation "
+      "argument, so it is worth establishing whether a second pass exists. "
+      "It matters which identifier is counted:\n")
+    A("| reference | identifies | distinct | ref×session pairs | repeated | rate | max |")
+    A("|---|---|---|---|---|---|---|")
+    for r in rw.itertuples():
+        A(f"| `{r.ref_kind}-` | {r.identifies} | {r.distinct_refs} | "
+          f"{r.ref_session_pairs} | {r.repeated} | {r.repeat_rate:.1%} | "
+          f"{r.max_repeats} |")
+    A("")
+    A("**Every one of the 64 real invoice cases was worked exactly once.** "
+      "The apparent 51% repeat rate on `BATCH-` references is an artefact: "
+      "those are *product* codes, only 6 distinct across 78 stock "
+      "adjustments, so the same product being adjusted on separate occasions "
+      "is not the same case being reworked. Counting all reference kinds "
+      "together gives a spurious 18.5% rework rate.\n")
+    A("So **there is no rework lever in this data** — the time saved has to "
+      "come from making each single pass faster, not from removing a second "
+      "one.\n")
+
+    A("## 5. Integration surface\n")
     A("Whether a process can be driven through the portal alone, or also "
       "needs a desktop application. This is the dominant cost difference "
       "between candidates.\n")
@@ -159,7 +201,7 @@ def main() -> None:
       f"inside one system; it is the desktop applications, not cross-system "
       f"navigation, that drive integration cost.\n")
 
-    A("## 5. Ranked automation candidates\n")
+    A("## 6. Ranked automation candidates\n")
     A("```\n"
       "opportunity = (volume + time_share)/2 x determinism x data_access\n"
       "              ----------------------------------------------------\n"
@@ -179,7 +221,7 @@ def main() -> None:
       "reduces `determinism`. See the module docstring in "
       "`src/analyze_day3.py` for the measurements behind each assignment.\n")
 
-    A("## 5b. What would remain manual, for the chosen scope\n")
+    A("## 6b. What would remain manual, for the chosen scope\n")
     A("Observed time for the three target processes, split into the part "
       "spent in the portal and the part that pulls in Word, Excel or "
       "Notepad. The tool addresses the former; the latter is untouched in "
@@ -197,7 +239,7 @@ def main() -> None:
       f"work is portal-only and therefore addressable. The remaining "
       f"{tot - add:.0f}s involves a desktop application and stays manual.\n")
 
-    A("## 6. Sensitivity of the ranking\n")
+    A("## 7. Sensitivity of the ranking\n")
     A("Rank of each process under alternative weightings. A recommendation "
       "that only survives one formula is not a recommendation.\n")
     keep = [l for l in real.label_final]

@@ -310,6 +310,88 @@ def residual_work(events: pd.DataFrame, ex: pd.DataFrame,
     return pd.DataFrame(rows)
 
 
+def activity_profile(events: pd.DataFrame, ex: pd.DataFrame) -> pd.DataFrame:
+    """What an execution is actually made of, per process.
+
+    Counts the mean number of clipboard operations, keystrokes, clicks, app
+    switches and distinct applications inside one execution. The clipboard
+    column is the interesting one: it is manual data movement — a value being
+    carried by hand from one field or application to another — which is
+    precisely the work an integration removes. Content is redacted throughout
+    (Day 1), so only the *count* is available, not what was copied.
+    """
+    import numpy as np
+
+    rows = []
+    for sid, gs in ex.groupby("session_id"):
+        ses = events[events.session_id == sid]
+        ts = ses.timestamp_ms.to_numpy()
+        et = ses.event_type.to_numpy()
+        ap = ses.app_name.to_numpy()
+        for r in gs.itertuples():
+            m = (ts >= r.start_ms) & (ts <= r.end_ms)
+            e, a = et[m], ap[m]
+            rows.append({
+                "label": r.label_final,
+                "duration_s": r.duration_s,
+                "clipboard": int((e == "clipboard_change").sum()),
+                "keystrokes": int((e == "keystroke").sum()),
+                "clicks": int(np.isin(
+                    e, ["mouse_click", "browser_click", "mouse_double_click"]).sum()),
+                "app_switches": int((e == "app_switch").sum()),
+                "distinct_apps": len({x for x in a if isinstance(x, str)}),
+            })
+    df = pd.DataFrame(rows)
+    return (df.groupby("label")
+              .agg(executions=("duration_s", "size"),
+                   median_s=("duration_s", "median"),
+                   clipboard_per_exec=("clipboard", "mean"),
+                   keystrokes_per_exec=("keystrokes", "mean"),
+                   clicks_per_exec=("clicks", "mean"),
+                   switches_per_exec=("app_switches", "mean"),
+                   apps_per_exec=("distinct_apps", "mean"),
+                   clipboard_total=("clipboard", "sum"))
+              .round(2)
+              .reset_index()
+              .sort_values("clipboard_per_exec", ascending=False))
+
+
+# Reference kinds found in completion comments. Only INV and P identify an
+# individual case; BATCH is a product code, and treating it as a case makes
+# repeat work look like rework when it is simply the same product adjusted
+# on separate occasions.
+CASE_REF_KINDS = {
+    "INV": "case",      # invoice number, one per case
+    "P": "case",        # portal record id, one per case
+    "BATCH": "product",  # product batch code, recurs by design
+}
+
+
+def rework(ex: pd.DataFrame) -> pd.DataFrame:
+    """Is the same case worked more than once in a session?
+
+    Split by reference kind, because the answer is completely different
+    depending on which you count. Rework is a standard automation argument —
+    "the tool removes the second pass" — so it is worth establishing whether
+    there is any, rather than assuming.
+    """
+    cr = ex[ex.case_ref.notna()].copy()
+    cr["kind"] = cr.case_ref.str.extract(r"^(INV|BATCH|P)")[0]
+    rows = []
+    for kind, g in cr.groupby("kind"):
+        rep = g.groupby(["session_id", "case_ref"]).size()
+        rows.append({
+            "ref_kind": kind,
+            "identifies": CASE_REF_KINDS.get(kind, "?"),
+            "distinct_refs": g.case_ref.nunique(),
+            "ref_session_pairs": len(rep),
+            "repeated": int((rep > 1).sum()),
+            "repeat_rate": round(float((rep > 1).mean()), 3),
+            "max_repeats": int(rep.max()),
+        })
+    return pd.DataFrame(rows)
+
+
 def variant_table(ex: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for (lab, var), g in ex.groupby(["label_final", "variant"]):
@@ -346,6 +428,10 @@ if __name__ == "__main__":
     print(ranked[["label_final", "executions", "total_s", "determinism",
                   "exception_nature", "data_access", "variants",
                   "opportunity"]].to_string(index=False))
+    print("\n=== activity profile per execution ===")
+    print(activity_profile(ev, ex).to_string(index=False))
+    print("\n=== rework check, by reference kind ===")
+    print(rework(ex).to_string(index=False))
     print("\n=== per operator ===")
     print(per_operator(ex).to_string(index=False))
     print("\n=== residual manual work for the chosen scope ===")

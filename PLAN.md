@@ -105,6 +105,13 @@ Top three as a stable set across four of five weightings:
 Four operators, each handling 9–13 of the 13 processes — no specialists, so
 adoption is a training problem rather than a redundancy one.
 
+Two ROI levers tested and found unavailable, recorded rather than quietly
+dropped: **there is no rework** (all 64 invoice cases worked exactly once; an
+apparent 18.5% rate was `BATCH-` product codes miscounted as case IDs), and
+**the process chain cannot be traced** (payment comments name 請求書照合
+upstream in 27 of 36 cases, but no case reference crosses processes), so
+automating one step cannot be credited with downstream savings.
+
 **Step 3 decided: a shared review-and-approve foundation with per-process
 definitions, configured for those three** — 214 of 601 executions (35.6%),
 2,527s of 10,076s (25.1%), of which **1,733s (68.6%) is portal-only and

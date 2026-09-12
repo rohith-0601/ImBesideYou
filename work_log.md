@@ -480,6 +480,55 @@ must take limits as client configuration rather than infer them here. I had
 been about to treat this as the most mechanisable rule in the dataset, which
 it may be, but not for the reason I first assumed.
 
+### Third pass: testing two ROI claims I had not yet earned
+
+I had the ranking and the residual-work estimate, but two standard automation
+arguments were still unexamined. Both turned out to be unavailable here, and
+one of them I had already half-made.
+
+**"The tool eliminates rework" — false, and I nearly published the opposite.**
+Counting repeat work by case reference gave 22 of 119 case-session pairs
+worked more than once, up to 5 times: an 18.5% rework rate, which would have
+been a good line in the report. It is wrong. Splitting by reference kind:
+`INV-` references (real invoice cases) are 64 distinct across 64 pairs with
+**zero** repeats, and `P-` references 2 of 16. The entire signal came from
+`BATCH-Wn`, which is a **product** code — only 6 distinct values across 78
+stock adjustments — so "the same batch adjusted six times" is six different
+cases about one product, not one case reworked six times.
+
+This is the third time on this task an identifier has looked like a case ID
+and not been one (`P<n>-…` on Day 1, `BATCH-` now). The tell is the same each
+time: far fewer distinct values than executions. I've added the ref-kind
+split to `analyze_day3.rework()` so the number can't be quoted unsplit.
+
+Consequence: **no rework lever exists.** Savings must come from making the
+single pass faster.
+
+**"Automating this step speeds up the next one" — not supportable.**
+`fin_payment_processing` comments carry a 工程 field naming their upstream
+steps, and 27 of 36 name 請求書照合 (invoice matching). So the chain is real
+procedurally. But no case reference appears in more than one process (0 of 85),
+and the 36 payment amounts share **zero** values with the 64 invoice amounts.
+The chain exists in the procedure and is invisible in the data — so end-to-end
+cycle time can't be measured, and I can't credit invoice automation with
+downstream payment savings. Recorded as a restriction rather than left as an
+implied benefit.
+
+**What an execution is made of.** 872 clipboard operations in total, and every
+process averages at least one per execution. Manual data movement is how all
+of this work is done, not a quirk of a few flows — and it's the thing an
+integration actually removes. Two useful reads: `hr_leave_application` is
+confirmed as the cleanest target from an independent direction (1.14
+clipboard, 3.0 keystrokes, 0.86 app switches, 1.12 apps — nearly
+single-application clicking, which is why its addressable share is 98.8%);
+and `fin_budget_variance_analysis` averages 57.9 keystrokes per execution,
+six times the next-highest, confirming it's figures typed into Excel and
+needs a different tool rather than a slot in this one.
+
+`hr_onboarding_verification` is the heaviest shuttler (2.74 clipboard, 9.42
+app switches). Largest per-case gain in the set, but 31 executions — noted
+for a later phase rather than pulled into scope.
+
 ### Decisions taken
 
 - **Step 3 scope: a shared review-and-approve foundation with per-process

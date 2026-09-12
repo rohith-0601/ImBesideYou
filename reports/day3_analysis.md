@@ -183,7 +183,43 @@ Where they differ is by process — a wide spread on an identical procedure sugg
 | `fin_invoice_matching` | 4 | 14.0 | 18.6 | 1.34x |
 | `inv_stock_adjustment` | 4 | 8.1 | 10.6 | 1.31x |
 
-## 4. Integration surface
+## 4. What an execution is made of
+
+Mean counts inside a single execution. `clipboard` is the one that matters most: it is a value being carried by hand between fields or applications, which is exactly the work an integration removes. Content is redacted throughout, so only the count is available.
+
+| process | median s | clipboard | keystrokes | clicks | app switches | apps |
+|---|---|---|---|---|---|---|
+| `hr_onboarding_verification` | 26.72 | 2.74 | 18.06 | 11.61 | 9.42 | 2.16 |
+| `hr_welfare_application` | 25.14 | 2.38 | 6.62 | 13.5 | 4.62 | 1.94 |
+| `inv_contract_management` | 20.57 | 1.89 | 11.85 | 8.09 | 6.34 | 2.04 |
+| `fin_budget_variance_analysis` | 20.79 | 1.73 | 57.93 | 8.4 | 3.2 | 2.13 |
+| `fin_payment_processing` | 20.65 | 1.64 | 10.86 | 6.75 | 3.89 | 1.72 |
+| `hr_payroll_change` | 10.54 | 1.53 | 4.05 | 8.53 | 0.74 | 1.26 |
+| `fin_expense_approval` | 18.39 | 1.52 | 8.48 | 6.45 | 4.13 | 1.84 |
+| `inv_stock_adjustment` | 8.8 | 1.32 | 4.44 | 5.11 | 1.17 | 1.49 |
+| `inv_it_request_processing` | 9.05 | 1.22 | 5.27 | 5.62 | 1.56 | 1.58 |
+| `fin_purchase_order_management` | 10.77 | 1.21 | 3.12 | 7.03 | 1.22 | 1.49 |
+| `hr_expense_settlement` | 9.92 | 1.21 | 3.73 | 5.39 | 1.49 | 1.5 |
+| `hr_leave_application` | 10.23 | 1.14 | 3.0 | 6.98 | 0.86 | 1.12 |
+| `fin_invoice_matching` | 15.18 | 1.08 | 11.88 | 6.95 | 3.44 | 2.22 |
+
+Every process copies and pastes at least once per execution on average (872 clipboard operations in total). Manual data movement is universal here, not confined to a few awkward flows.
+
+## 4b. Is there rework to eliminate?
+
+"The tool removes the second pass" is a standard automation argument, so it is worth establishing whether a second pass exists. It matters which identifier is counted:
+
+| reference | identifies | distinct | ref×session pairs | repeated | rate | max |
+|---|---|---|---|---|---|---|
+| `BATCH-` | product | 6 | 39 | 20 | 51.3% | 6 |
+| `INV-` | case | 64 | 64 | 0 | 0.0% | 1 |
+| `P-` | case | 15 | 16 | 2 | 12.5% | 2 |
+
+**Every one of the 64 real invoice cases was worked exactly once.** The apparent 51% repeat rate on `BATCH-` references is an artefact: those are *product* codes, only 6 distinct across 78 stock adjustments, so the same product being adjusted on separate occasions is not the same case being reworked. Counting all reference kinds together gives a spurious 18.5% rework rate.
+
+So **there is no rework lever in this data** — the time saved has to come from making each single pass faster, not from removing a second one.
+
+## 5. Integration surface
 
 Whether a process can be driven through the portal alone, or also needs a desktop application. This is the dominant cost difference between candidates.
 
@@ -205,7 +241,7 @@ Whether a process can be driven through the portal alone, or also needs a deskto
 
 Median distinct portals touched within a single execution: **1.0** for every process. A case stays inside one system; it is the desktop applications, not cross-system navigation, that drive integration cost.
 
-## 5. Ranked automation candidates
+## 6. Ranked automation candidates
 
 ```
 opportunity = (volume + time_share)/2 x determinism x data_access
@@ -231,7 +267,7 @@ opportunity = (volume + time_share)/2 x determinism x data_access
 
 `exceptions` distinguishes an exception that is a labelled property of the case (`predictable` — one branch to implement) from one discovered during the work and unpredictable from anything the log captures (`judgement` — work a machine cannot take over). Only the latter reduces `determinism`. See the module docstring in `src/analyze_day3.py` for the measurements behind each assignment.
 
-## 5b. What would remain manual, for the chosen scope
+## 6b. What would remain manual, for the chosen scope
 
 Observed time for the three target processes, split into the part spent in the portal and the part that pulls in Word, Excel or Notepad. The tool addresses the former; the latter is untouched in this phase. Review time is retained in full on top of this, because the tool prepares and a human commits.
 
@@ -243,7 +279,7 @@ Observed time for the three target processes, split into the part spent in the p
 
 **1733s of 2527s (68.6%)** of the targeted work is portal-only and therefore addressable. The remaining 794s involves a desktop application and stays manual.
 
-## 6. Sensitivity of the ranking
+## 7. Sensitivity of the ranking
 
 Rank of each process under alternative weightings. A recommendation that only survives one formula is not a recommendation.
 
