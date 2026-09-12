@@ -57,7 +57,7 @@ only one that tested something the algorithm didn't already assume — and its
 first version was itself buggy. See
 [`reports/day2_findings.md`](reports/day2_findings.md).
 
-## Day 3 — Step 2: process analysis and ROI prioritisation
+## Day 3 — Step 2: process analysis and ROI prioritisation ✅
 
 - Per process: execution count, time consumed, operators involved, variance
   between executions (the "different handling patterns" question). All four
@@ -84,12 +84,40 @@ Three leads carried from Day 2, to be tested rather than assumed:
 - `fin_budget_variance_analysis` is 497 Excel events out of 714 — nearly pure
   spreadsheet work, a different automation shape from the portal flows.
 
+**Outcome:** 601 executions across 12 processes, 4 operators, with variants
+read directly off the completion comments. One screen turned out to host two
+processes (payroll change vs expense settlement). 133 executions were
+relabelled from their own completion comment — 108 of them that split, and 25
+genuine context mislabels where the comment was typed outside the browser.
+
+Ranked on volume x time x determinism x data-access / branch-cost, with a
+five-weighting sensitivity check. **The largest process by time
+(`fin_invoice_matching`) ranks 7th** — 34% of its cases need human judgement
+and only 25% stay in the browser. Top three: `hr_leave_application`,
+`hr_expense_settlement`, `fin_purchase_order_management`.
+
+**Step 3 decided: a shared review-and-approve foundation with per-process
+definitions, configured for those three** — 214 of 601 executions (35.6%),
+2,527s of 10,076s (25.1%). Justified by the completion templates being
+parameterised strings, so a process definition is config rather than code.
+
+**The finding that reshaped Day 4:** across 20,477 events there are 7 `✓ 承認`
+clicks. The submit action is essentially never captured, so the terminal step
+of every one of these flows is unobserved. See
+[`reports/day3_findings.md`](reports/day3_findings.md) §5.
+
 ## Day 4 — Step 3 foundation: web app scaffold + the hard integration
 
+- **First: verify the submit path.** Day 3 found the approve action is
+  essentially absent from the logs (7 `✓ 承認` clicks in 20,477 events), so
+  whether approval can be driven programmatically is unknown and everything
+  else rests on it. If it cannot, the tool becomes a preparation-and-checklist
+  surface rather than an execute surface — a change of shape that must be
+  discovered before building, not after.
 - Lock the stack and scaffold the app.
-- Do the risky integration first, while there's still time to change course:
-  get the app reading real portal data and driving the real target actions
-  against the local portal (`127.0.0.1:5132/5133/5134`).
+- Get the app reading real portal data from `127.0.0.1:5132/5133/5134`.
+- Define the per-process definition schema, so the three configured processes
+  are data rather than code.
 - Deliberately front-loaded: if the integration can't work, Day 4 is when to
   find out, not Day 6.
 

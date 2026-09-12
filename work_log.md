@@ -332,3 +332,146 @@ instead of quoting the better one.
 | `reports/day2_segmentation.md` | generated statistics and the taxonomy evidence |
 | `reports/day2_findings.md` | curated findings |
 | `reports/day2_boundary_spotcheck.md` | 30 sampled boundaries with image paths |
+
+---
+
+## Day 3
+
+**Goal:** answer Step 2 — what work is done, how often, by whom, with what
+variation — then rank automation candidates on stated criteria and decide the
+Step 3 target and scope.
+
+### What I did
+
+1. **Parsed the completion comments into structured case records**
+   (`src/case_parser.py`). Day 2 found them as boundaries; Day 3 reads what
+   they say. They are strictly templated, one template per process, with the
+   case details in slots.
+2. **Cross-checked every execution's label against its comment template** and
+   used the comment to correct the label where they disagreed.
+3. **Built the Step 2 analysis** (`src/analyze_day3.py`) — executions, time,
+   operators, variants, exception rates, integration surface.
+4. **Scored and ranked** candidates on explicit criteria, then ran a
+   **sensitivity check** across five weightings.
+5. **Tested the shared-shape hypothesis** before committing to a scope, by
+   looking for a common approve-flow across processes — which is where the
+   most important finding of the day came from.
+6. **Regenerated `segments.jsonl`** with the corrected labels.
+7. **Wrote the reports** (`src/report_day3.py` generates the numbers;
+   `day3_findings.md` holds the decision).
+
+### What I found
+
+- **One screen hosts two processes.** `5132|#/payroll-items` is both
+  `給与変更登録` (payroll master change, 19 executions) and
+  `経費精算確認済み` (expense settlement check, 90 executions). Counting them
+  as one 111-execution process with "ten variants" would have overstated both
+  the volume and the branching of a candidate that ranks near the top. This
+  is the third time a screen-derived label turned out coarser than the real
+  process; the portal's navigation structure is not the business structure.
+- **The comment outranks the screen context for labelling.** Where a URL was
+  live, comment and label agree 415/419 (99.0%). Where the comment was typed
+  in Notepad or Excel, 41/62 (66.1%) — the inherited context is just wrong
+  there. 133 of 601 executions relabelled in total: 108 from the HR screen
+  split above (a refinement) and 25 genuine context mislabels. Deliverable
+  regenerated.
+- **The biggest process is not the best target.** `fin_invoice_matching` has
+  the most time (1,288s) and ranks **7th**: 34.4% of cases end in
+  差異あり要確認 (human judgement), and only 25% stay in the browser. Ranking
+  by size alone picks it, and that would be wrong.
+- **The ranking is stable.** Across five weightings `hr_leave_application` is
+  1st in four; the exception is "ignore feasibility entirely", which is
+  exactly the weighting that produces the bad answer.
+- **All twelve processes share one shape** — select record, check rule, write
+  a templated comment, submit. That is what makes a shared foundation with
+  per-process definitions the right scope rather than a bespoke tool.
+
+### What didn't work
+
+- **My first `n_systems` metric measured nothing.** I scored "data access
+  difficulty" as the number of portals a process touches, computed as a union
+  across all its executions. That is 3 for every process, because every
+  process is reachable from all three portals over a day. Recomputed *per
+  execution* it is 1.0 for all twelve — a case stays inside one system. So
+  the component was doing no work at all and was silently flattening the
+  ranking. Replaced with the share of executions that stay inside the
+  browser, which does vary (17%–96%) and is the real integration-cost
+  difference. The lesson: a component that produces the same value for every
+  row is not a weak signal, it is no signal, and it took looking at the
+  column to notice.
+- **Two variant regexes were extracting the wrong slot.** All 44
+  `inv_it_request_processing` executions came back as variant "IT申請"
+  (the template header) instead of the five real request types, and stock
+  adjustment returned product names rather than the 区分 handling code. Both
+  looked fine as a count — 44 executions, variant extracted — and were only
+  visible once I printed the variant values themselves.
+- **Three figures in the findings were stale or wrong and I had to go back
+  for them.** Two totals I'd written from memory (10,281s vs the actual
+  10,076s; 24.6% vs 25.1%), and a relabelling count of 37 that was measured
+  *before* I split the HR screen into two processes — the real number is 133,
+  of which 108 are that split and only 25 are genuine corrections. The 37
+  survived in the draft because it still looked plausible. I caught it only
+  because the segmenter printed its own count and the two disagreed, which is
+  an argument for having the pipeline print numbers the report also claims.
+
+### The finding that changed the plan
+
+**The terminal action is invisible in the logs.** Across all 20,477 events
+there are 7 `✓ 承認` clicks and 4 `⏸ 保留` clicks. Only 1.6% of invoice
+executions contain an approve-style click at all.
+
+I went looking for the shared approve-flow expecting to confirm it, and found
+the opposite: we can see a worker select a record, consult a document and
+write a completion comment, but we essentially never see the submit. L3
+browser coverage is 13.5% of events and UIA rarely names the button.
+
+That is the single biggest risk in the proposal and it is evidence-based —
+we would be automating a flow whose final step has never been observed. We
+don't know the endpoint, the payload, whether it's idempotent, or what it
+returns on failure. It also settles the human-in-the-loop question: with the
+submit path unverified and payroll records at stake, a tool that *prepares*
+and a human who *commits* is the only defensible first version.
+
+Day 4's first task is now to verify the submit path against the real portal,
+before building anything on top of it.
+
+### Decisions taken
+
+- **Step 3 scope: a shared review-and-approve foundation with per-process
+  definitions, configured for three processes** — `hr_leave_application`,
+  `hr_expense_settlement`, `fin_purchase_order_management`. Together 214 of
+  601 executions (35.6%) and 2,527s of 10,076s (25.1%).
+- **Justified by measurement, not preference:** the completion templates are
+  parameterised strings, so a process definition is a config object (template,
+  variant list, rule, target screen). One bespoke tool for the top process
+  covers 690s; the same effort plus three config entries covers 2,527s.
+- **Deferred with reasons stated**, not for lack of time:
+  `fin_invoice_matching` (34% judgement, 75% desktop),
+  `inv_contract_management` (needs `.docx` handling),
+  `fin_budget_variance_analysis` (Excel, a different tool),
+  `inv_stock_adjustment` (11 variants on 81 executions — thinnest evidence
+  per branch), and straight-through processing (unverified submit path).
+- **Relative figures only.** The README says waiting time was compressed, so
+  the report ranks processes against each other and extrapolates no
+  annualised saving.
+
+### Generative AI usage
+
+Claude Code (Opus 5). The comment-template taxonomy and the variant regexes
+were drafted with the model and then corrected against printed output twice —
+both regex bugs above were caught that way, not by reading the patterns.
+Japanese business vocabulary (給与変更登録, 経費精算確認済み, 差異あり要確認,
+規程内であることを確認した, 発注管理処理, 緊急発注) was translated with the
+model's help. The scoring formula was mine; the sensitivity check was added
+because a single composite number is a fragile basis for a recommendation.
+
+### Artifacts
+
+| file | what it is |
+|---|---|
+| `src/case_parser.py` | completion-comment templates, variant/amount/date extraction, label correction |
+| `src/analyze_day3.py` | Step 2 statistics, integration surface, opportunity scoring |
+| `src/report_day3.py` | regenerates `day3_analysis.md`, including the sensitivity table |
+| `reports/day3_analysis.md` | generated Step 2 tables and the ranking |
+| `reports/day3_findings.md` | curated findings, risks, and the Step 3 decision |
+| `segments/segments.jsonl` | regenerated with comment-corrected labels |
