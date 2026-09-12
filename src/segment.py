@@ -209,11 +209,29 @@ def main() -> None:
     ap.add_argument("--episodes-only", action="store_true",
                     help="emit process episodes without splitting into "
                          "per-case executions")
+    ap.add_argument("--raw-labels", action="store_true",
+                    help="skip the Day 3 correction that relabels an "
+                         "execution from its own completion comment")
     args = ap.parse_args()
 
     roots = DATASET_B_ROOTS if args.dataset == "b" else DATASET_A_ROOTS
     events = annotate(load_events(roots))
     segs = segment(events, split_executions=not args.episodes_only)
+
+    # The completion comment names its own process; a forward-filled screen
+    # context does not. Applied by default — it moves 37 of 601 executions,
+    # almost all of them comments written in Notepad or Excel where no URL
+    # was available to inherit from. See reports/day3_findings.md.
+    if not args.raw_labels and "case_comment" in segs.columns:
+        from case_parser import template_label
+        corrected = [
+            template_label(c) if isinstance(c, str) else None
+            for c in segs["case_comment"]
+        ]
+        n = sum(1 for c, old in zip(corrected, segs["label"])
+                if c is not None and c != old)
+        segs["label"] = [c or old for c, old in zip(corrected, segs["label"])]
+        print(f"[segment] labels corrected from completion comment: {n}")
 
     out = Path(args.out)
     write_segments_jsonl(segs, out)
