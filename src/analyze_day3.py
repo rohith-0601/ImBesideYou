@@ -24,9 +24,31 @@ processes, and the final number is meaningless except as an ordering.
 
   volume        share of all executions            (how often it happens)
   time_share    share of all observed process time (what it costs today)
-  determinism   1 - exception_rate                 (how often a human must judge)
+  determinism   penalises *unpredictable* exceptions only
   data_access   share of executions confined to the browser
   branch_cost   1 + normalised variant count       (how many paths to support)
+
+Not all exceptions cost the same
+--------------------------------
+`determinism` began as `1 - exception_rate`, which turned out to conflate two
+very different situations:
+
+* `fin_purchase_order_management` has a 13.2% exception rate, and every one of
+  those exceptions is a 緊急発注 (urgent order). Exception rate by variant is
+  exactly 1.0 for 緊急発注 and exactly 0.0 for スポット発注 / 定期発注 /
+  年間契約. The exception is a **labelled property of the order, known before
+  the work starts**. Supporting it is one branch.
+* `fin_invoice_matching` has a 34.4% exception rate (差異あり要確認), and
+  nothing captured predicts it. Amount does not: 差異あり averages
+  ¥1,030,094 against ¥1,299,373 for 差異なし, with medians of ¥665,036 and
+  ¥697,654 and fully overlapping ranges. The 種別 column visible in the
+  screenshots (調整 / 定常) **never appears in the event log at all** — not in
+  `extracted_text`, not in any element name. The discrepancy is *discovered by
+  doing the comparison*, against data the recording does not carry.
+
+Penalising both at 1 - rate rewarded the wrong candidate. Only unpredictable
+exceptions reduce `determinism` now; predictable ones are charged to
+`branch_cost` instead, where they belong.
 
 `data_access` started as "how many of the three portals does one execution
 touch". Measured, that is 1 for every process — a case stays inside one
@@ -97,6 +119,17 @@ def apps_per_process(ex: pd.DataFrame) -> dict[str, list[str]]:
         out[lab] = apps
     return out
 
+
+# How each process's exceptions arise. Stated explicitly with the evidence
+# rather than derived, because for fin_invoice_matching the variant *is* the
+# outcome, so deriving predictability from the variant would be circular.
+#   predictable  - determined by a field captured before the work begins
+#   judgement    - discovered during the work, not predictable from the log
+#   none         - no exceptions observed
+EXCEPTION_NATURE = {
+    "fin_purchase_order_management": "predictable",  # 緊急発注, rate 1.0 by variant
+    "fin_invoice_matching": "judgement",             # 差異あり; amount does not predict, 種別 never logged
+}
 
 BROWSER_APPS = {"Microsoft Edge"}
 DESKTOP_APPS = {"Microsoft Word", "Microsoft Excel", "Notepad"}
@@ -171,7 +204,12 @@ def score(stats: pd.DataFrame, systems: dict[str, float],
 
     df["volume"] = norm(df.executions)
     df["time_share"] = norm(df.total_s)
-    df["determinism"] = 1 - df.exception_rate
+    df["exception_nature"] = df.label_final.map(EXCEPTION_NATURE).fillna("none")
+    # Only judgement exceptions reduce determinism. A predictable exception is
+    # a branch to implement, not work a machine cannot do, so it is charged to
+    # branch_cost via the variant count instead.
+    df["determinism"] = 1 - df.exception_rate.where(
+        df.exception_nature == "judgement", 0.0)
     # Floor at 0.2 so a fully desktop-bound process is penalised but not
     # zeroed out — it is harder to automate, not impossible.
     df["data_access"] = df.browser_only_share.fillna(0).clip(lower=0.2)
@@ -184,6 +222,92 @@ def score(stats: pd.DataFrame, systems: dict[str, float],
         / df.branch_cost
     ).round(3)
     return df.sort_values("opportunity", ascending=False).reset_index(drop=True)
+
+
+TARGET_PROCESSES = [
+    "hr_leave_application",
+    "hr_expense_settlement",
+    "fin_purchase_order_management",
+]
+
+
+def per_operator(ex: pd.DataFrame) -> pd.DataFrame:
+    """Who does what, and how consistently.
+
+    The README asks how many people are involved. The more useful form of the
+    question is whether the work is concentrated or shared, and whether
+    operators handle the same process at the same speed — wide spread between
+    operators on an identical process is itself an argument for automating it,
+    since it means the procedure is being applied inconsistently.
+    """
+    rows = []
+    for op, g in ex.groupby("operator"):
+        rows.append({
+            "operator": op[-8:] if isinstance(op, str) else op,
+            "executions": len(g),
+            "processes": g.label_final.nunique(),
+            "sessions": g.session_id.nunique(),
+            "total_s": round(g.duration_s.sum(), 1),
+            "median_s": round(g.duration_s.median(), 1),
+        })
+    return pd.DataFrame(rows).sort_values("executions", ascending=False)
+
+
+def operator_spread(ex: pd.DataFrame) -> pd.DataFrame:
+    """Per process, how much operators differ in median time per execution."""
+    rows = []
+    for lab, g in ex.groupby("label_final"):
+        med = g.groupby("operator").duration_s.median()
+        if len(med) < 2:
+            continue
+        rows.append({
+            "label": lab,
+            "operators": len(med),
+            "fastest_median_s": round(med.min(), 1),
+            "slowest_median_s": round(med.max(), 1),
+            "spread_x": round(med.max() / med.min(), 2) if med.min() else None,
+        })
+    return (pd.DataFrame(rows)
+            .sort_values("spread_x", ascending=False)
+            .reset_index(drop=True))
+
+
+def residual_work(events: pd.DataFrame, ex: pd.DataFrame,
+                  targets: list[str]) -> pd.DataFrame:
+    """What the tool would *not* remove, for the processes in scope.
+
+    Splits each target process's observed time into the part spent in the
+    portal (which a prepared-and-reviewed tool can compress) and the part
+    spent in desktop applications (which it cannot, in this phase). Used for
+    the README's "what manual work remains after deployment" question, and
+    deliberately conservative: review time is retained in full, because the
+    tool prepares and a human still commits.
+    """
+    rows = []
+    for lab in targets:
+        g = ex[ex.label_final == lab]
+        portal_s = desktop_s = 0.0
+        for sid, gs in g.groupby("session_id"):
+            ses = events[events.session_id == sid]
+            ts = ses.timestamp_ms.to_numpy()
+            apps = ses.app_name.to_numpy()
+            for r in gs.itertuples():
+                mask = (ts >= r.start_ms) & (ts <= r.end_ms)
+                used = {a for a in apps[mask] if isinstance(a, str)}
+                if used & DESKTOP_APPS:
+                    desktop_s += r.duration_s
+                else:
+                    portal_s += r.duration_s
+        total = portal_s + desktop_s
+        rows.append({
+            "label": lab,
+            "executions": len(g),
+            "total_s": round(total, 1),
+            "portal_only_s": round(portal_s, 1),
+            "desktop_involved_s": round(desktop_s, 1),
+            "addressable_share": round(portal_s / total, 3) if total else None,
+        })
+    return pd.DataFrame(rows)
 
 
 def variant_table(ex: pd.DataFrame) -> pd.DataFrame:
@@ -220,4 +344,9 @@ if __name__ == "__main__":
     print(surface.to_string(index=False))
     print("\n=== ranked automation candidates ===")
     print(ranked[["label_final", "executions", "total_s", "determinism",
-                  "data_access", "variants", "opportunity"]].to_string(index=False))
+                  "exception_nature", "data_access", "variants",
+                  "opportunity"]].to_string(index=False))
+    print("\n=== per operator ===")
+    print(per_operator(ex).to_string(index=False))
+    print("\n=== residual manual work for the chosen scope ===")
+    print(residual_work(ev, ex, TARGET_PROCESSES).to_string(index=False))

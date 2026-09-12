@@ -93,13 +93,24 @@ genuine context mislabels where the comment was typed outside the browser.
 Ranked on volume x time x determinism x data-access / branch-cost, with a
 five-weighting sensitivity check. **The largest process by time
 (`fin_invoice_matching`) ranks 7th** — 34% of its cases need human judgement
-and only 25% stay in the browser. Top three: `hr_leave_application`,
-`hr_expense_settlement`, `fin_purchase_order_management`.
+that nothing captured predicts, and only 25% stay in the browser. Scoring
+distinguishes a *predictable* exception (緊急発注, a labelled field — one
+branch) from a *judgement* one (差異あり, discovered during the work), because
+charging both alike rewarded the wrong candidate.
+
+Top three as a stable set across four of five weightings:
+`fin_purchase_order_management`, `hr_leave_application`,
+`hr_expense_settlement`.
+
+Four operators, each handling 9–13 of the 13 processes — no specialists, so
+adoption is a training problem rather than a redundancy one.
 
 **Step 3 decided: a shared review-and-approve foundation with per-process
 definitions, configured for those three** — 214 of 601 executions (35.6%),
-2,527s of 10,076s (25.1%). Justified by the completion templates being
-parameterised strings, so a process definition is config rather than code.
+2,527s of 10,076s (25.1%), of which **1,733s (68.6%) is portal-only and
+addressable**; the rest involves Word/Excel and stays manual. Justified by the
+completion templates being parameterised strings, so a process definition is
+config rather than code.
 
 **The finding that reshaped Day 4:** across 20,477 events there are 7 `✓ 承認`
 clicks. The submit action is essentially never captured, so the terminal step
@@ -117,7 +128,10 @@ of every one of these flows is unobserved. See
 - Lock the stack and scaffold the app.
 - Get the app reading real portal data from `127.0.0.1:5132/5133/5134`.
 - Define the per-process definition schema, so the three configured processes
-  are data rather than code.
+  are data rather than code. Policy limits (e.g. the expense
+  規程内 thresholds) are **configuration supplied by the client**, not values
+  inferred from the logs — every observed case was approved, so the data shows
+  ranges, never a limit.
 - Deliberately front-loaded: if the integration can't work, Day 4 is when to
   find out, not Day 6.
 

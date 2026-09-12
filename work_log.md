@@ -435,12 +435,59 @@ and a human who *commits* is the only defensible first version.
 Day 4's first task is now to verify the submit path against the real portal,
 before building anything on top of it.
 
+### Second pass: three things the first pass got wrong or skipped
+
+**1. The score charged predictable and unpredictable exceptions identically.**
+`determinism = 1 - exception_rate` treated `fin_purchase_order_management`
+(13.2% exceptions) as harder than it is. Checked by variant: exception rate is
+exactly 1.0 for 緊急発注 and exactly 0.0 for the other three order types — the
+exception is a labelled field, known before work starts, and supporting it is
+one branch. Meanwhile `fin_invoice_matching`'s 34.4% is genuine judgement:
+amount does not predict it (means ¥1.03M vs ¥1.30M, medians ¥665k vs ¥698k,
+fully overlapping), and the 種別 column visible in the screenshots **never
+appears in the log at all**. Split the two cases; only judgement exceptions
+now reduce determinism. This moved `fin_purchase_order_management` from 3rd to
+1st. The chosen *set* of three did not change, which is the reassuring part.
+
+**2. I had not actually answered "how many people are involved" properly.**
+Only "operators per process". Doing it per operator: four people, each
+handling 9–13 of the 13 processes, median 11.0–13.7s each. Nobody is a
+specialist — so automation is a training problem, not a redundancy one, and
+there is no key-person risk to claim as urgency. The interesting variation is
+*within* processes: `hr_welfare_application` has a 3.40× spread between
+operators on an identical procedure and `hr_onboarding_verification` 2.37×.
+Inconsistent application is worth more than the time saved — but both rank
+9th and 13th otherwise, so I recorded the tension rather than reverse-
+engineering the scope to match it. With 16 and 31 executions the sample
+cannot separate inconsistent practice from a few slow cases.
+
+**3. No estimate of what stays manual.** The README requires it and I had
+nothing. Splitting the three target processes' time by whether an execution
+pulls in a desktop app: **1,733s of 2,527s (68.6%) is portal-only and
+addressable**; 794s involves Word/Excel/Notepad and stays manual. Crucially
+that 68.6% is a ceiling, not a forecast — review time is retained in full,
+the submit may stay manual (§6), and `hr_expense_settlement` is half desktop
+work despite being the volume argument for its inclusion. Writing the number
+without those three deductions would be exactly the optimistic framing the
+README says scores badly.
+
+Also checked and worth stating: the `hr_expense_settlement` rule
+(規程内であることを確認した) looked like a clean amount threshold per
+category, and the observed bands are tidy (交通費精算 ¥5,083–24,395 …
+接待交際費 ¥60,936–135,181). But **every observed case was approved** — there
+are no rejections in the data — so these are ranges, not thresholds. The tool
+must take limits as client configuration rather than infer them here. I had
+been about to treat this as the most mechanisable rule in the dataset, which
+it may be, but not for the reason I first assumed.
+
 ### Decisions taken
 
 - **Step 3 scope: a shared review-and-approve foundation with per-process
-  definitions, configured for three processes** — `hr_leave_application`,
-  `hr_expense_settlement`, `fin_purchase_order_management`. Together 214 of
-  601 executions (35.6%) and 2,527s of 10,076s (25.1%).
+  definitions, configured for three processes** — `fin_purchase_order_management`,
+  `hr_leave_application`, `hr_expense_settlement`. Together 214 of 601
+  executions (35.6%) and 2,527s of 10,076s (25.1%), of which 1,733s (68.6%)
+  is portal-only and addressable. Taken as a set rather than by rank, since
+  the top three scores sit within 0.033 of each other.
 - **Justified by measurement, not preference:** the completion templates are
   parameterised strings, so a process definition is a config object (template,
   variant list, rule, target screen). One bespoke tool for the top process

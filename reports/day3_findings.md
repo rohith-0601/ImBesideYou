@@ -7,17 +7,17 @@ Curated conclusions. Reproducible tables are in
 
 ## 1. Step 2 answered
 
-**601 executions, 14 process labels, 4 operators, 15 sessions.** Every
+**601 executions across 13 processes, 4 operators, 15 sessions.** Every
 execution carries the completion comment its worker wrote, which names the
 process, the handling pattern, and often the amount and the decision. So the
 README's Step 2 questions are read off the data rather than inferred.
 
 | question | answer |
 |---|---|
-| What processes are performed? | 12 distinct back-office processes across three systems (HR payroll, financial accounting, order/inventory) |
+| What processes are performed? | **13** distinct back-office processes across three systems (HR payroll, financial accounting, order/inventory) — 12 recognised on Day 2, plus the split in §2 |
 | How often? | 15–90 executions each over ~3 hours of recording |
 | How much time? | 294–1,288s each; total 10,076s of attributed process time |
-| How many people? | 4 operators; every process is performed by 2–4 of them, none is a single-person silo |
+| How many people? | 4 operators, each handling 9–13 of the 13 processes; no specialists, no single-person silos (§9) |
 | Different handling patterns? | Yes — 2–11 named variants per process, stated explicitly in the comment |
 
 ## 2. One screen hosts two processes
@@ -69,21 +69,43 @@ things worth separating:
 Two executions have no completion comment at all and keep the Day 2
 screen-level label. They are left visible rather than force-assigned.
 
-## 4. Ranked candidates, and why the biggest process is not the best one
+## 4. Not all exceptions cost the same
+
+The first version of the score used `determinism = 1 - exception_rate`, which
+conflated two situations that are nothing alike.
+
+**`fin_purchase_order_management` — 13.2% exceptions, entirely predictable.**
+Exception rate by variant is exactly **1.0 for 緊急発注** and exactly **0.0**
+for スポット発注, 定期発注 and 年間契約. The exception is a labelled property
+of the order, known before the work starts. Supporting it is one branch.
+
+**`fin_invoice_matching` — 34.4% exceptions, not predictable from anything
+captured.** Amount does not predict the branch: 差異あり averages ¥1,030,094
+against ¥1,299,373 for 差異なし, medians ¥665,036 vs ¥697,654, fully
+overlapping ranges. And the 種別 column (調整 / 定常) that is plainly visible
+in the screenshots **never appears in the event log at all** — not in
+`extracted_text`, not in any element name. The discrepancy is discovered by
+performing the comparison, against data the recording does not carry.
+
+Charging both at `1 - rate` rewarded the wrong candidate. Now only judgement
+exceptions reduce `determinism`; predictable ones are charged to
+`branch_cost`, where they belong.
+
+## 5. Ranked candidates, and why the biggest process is not the best one
 
 ```
 opportunity = (volume + time_share)/2 x determinism x data_access / branch_cost
 ```
 
-| # | process | exec | total s | determinism | browser-only | variants | opportunity |
+| # | process | exec | total s | determinism | exceptions | browser-only | opportunity |
 |---|---|---|---|---|---|---|---|
-| 1 | `hr_leave_application` | 56 | 690 | 1.000 | **96.4%** | 5 | **0.351** |
-| 2 | `hr_expense_settlement` | 90 | 972 | 1.000 | 56.7% | 5 | 0.333 |
-| 3 | `fin_purchase_order_management` | 68 | 864 | 0.868 | 73.5% | 4 | 0.318 |
-| 4 | `inv_stock_adjustment` | 81 | 827 | 1.000 | 58.0% | 11 | 0.213 |
-| 5 | `inv_it_request_processing` | 45 | 528 | 1.000 | 57.8% | 5 | 0.156 |
-| 7 | `fin_invoice_matching` | 64 | **1,288** | **0.656** | **25.0%** | 2 | 0.118 |
-| 8 | `inv_contract_management` | 47 | **1,186** | 1.000 | **17.0%** | 5 | 0.097 |
+| 1 | `fin_purchase_order_management` | 68 | 864 | 1.000 | predictable | 73.5% | **0.366** |
+| 2 | `hr_leave_application` | 56 | 690 | 1.000 | none | **96.4%** | 0.351 |
+| 3 | `hr_expense_settlement` | 90 | 972 | 1.000 | none | 56.7% | 0.333 |
+| 4 | `inv_stock_adjustment` | 81 | 827 | 1.000 | none | 58.0% | 0.213 |
+| 5 | `inv_it_request_processing` | 45 | 528 | 1.000 | none | 57.8% | 0.156 |
+| 7 | `fin_invoice_matching` | 64 | **1,288** | **0.656** | **judgement** | **25.0%** | 0.118 |
+| 8 | `inv_contract_management` | 47 | **1,186** | 1.000 | none | **17.0%** | 0.097 |
 
 **`fin_invoice_matching` is the largest process by time and ranks 7th.** Two
 measured reasons: 34.4% of its cases end in 差異あり要確認 ("discrepancy,
@@ -99,15 +121,20 @@ document. The Day 2 lead was right that this is highly automatable *in
 principle* — but "open the named Word document" is a desktop integration, not
 an HTTP call.
 
-### The ranking is stable
+### The ranking is stable as a set
 
-Under five different weightings, `hr_leave_application` ranks 1st in four and
-7th in the fifth — the exception being "ignore feasibility entirely", which
-is precisely the weighting that produces the wrong answer. `hr_expense_settlement`
-ranks 1–3 in every scenario. The top three are not an artefact of the formula;
-see §5 of [`day3_analysis.md`](day3_analysis.md).
+Under five weightings, the **same three processes occupy positions 1–3 in
+four of them**. Their internal order shifts, which is expected when the top
+scores sit within 0.033 of each other, but the membership does not. The one
+exception is "ignore feasibility entirely", which drops all three and
+promotes `fin_invoice_matching` to 2nd — precisely the weighting that
+produces the wrong answer. See §6 of
+[`day3_analysis.md`](day3_analysis.md).
 
-## 5. The most important feasibility finding: the terminal action is invisible
+Because the three are so close, the scope decision below takes all three
+rather than resting on which of them happens to be first.
+
+## 6. The most important feasibility finding: the terminal action is invisible
 
 Across all 20,477 events there are **7 `✓ 承認` clicks and 4 `⏸ 保留` clicks**.
 Only 1.6% of `fin_invoice_matching` executions contain an approve-style click
@@ -129,7 +156,7 @@ a single instrumented recording where the extension stays connected. That is
 Day 4's first task, deliberately, because if the submit path cannot be driven
 the whole shape of Step 3 changes.
 
-## 6. Other risks, each tied to its evidence
+## 7. Other risks, each tied to its evidence
 
 | risk | evidence |
 |---|---|
@@ -140,7 +167,7 @@ the whole shape of Step 3 changes.
 | **Durations are compressed** | the README says so explicitly; used for *relative* ranking only, and no annualised saving is extrapolated |
 | **Approval is a governance boundary** | these are HR/payroll and finance records — a wrong silent write is expensive and, for payroll, individually harmful |
 
-## 7. Step 3 decision
+## 8. Step 3 decision
 
 **Build a shared review-and-approve foundation with per-process definitions,
 and configure it for the top three processes.**
@@ -181,8 +208,8 @@ Together: **214 of 601 executions (35.6%)** and **2,527s of 10,076s (25.1%)**.
 The Day 1 reasoning holds and is now better supported. The portals are
 already local web apps; a browser-based tool sits alongside them with no
 desktop install, and gives the operator a review surface. Human-in-the-loop
-is not a nicety here — with the submit path unverified (§5) and payroll
-records at stake (§6), a tool that prepares and a human who commits is the
+is not a nicety here — with the submit path unverified (§6) and payroll
+records at stake (§7), a tool that prepares and a human who commits is the
 only defensible first version.
 
 ### What is explicitly deferred, and why
@@ -199,7 +226,71 @@ only defensible first version.
 - **Straight-through processing** — deferred on purpose, not on schedule.
   Nothing in the logs establishes that the submit is safe to automate.
 
-## 8. Carried into Day 4
+## 9. Who does the work, and what would remain manual
+
+### The work is generalist, not siloed
+
+| operator | executions | distinct processes | sessions | median s |
+|---|---|---|---|---|
+| `…add2c670` | 211 | 13 | 5 | 11.0 |
+| `…bddf9c19` | 196 | 13 | 5 | 11.3 |
+| `…89cbde9a` | 124 | 9 | 3 | 11.2 |
+| `…6c76a7ff` | 70 | 11 | 2 | 13.7 |
+
+Four operators, each handling **9–13 of the 13 processes**. Nobody is a
+specialist and no process is one person's silo. Two consequences for the
+proposal: automating any single process touches all four people rather than
+displacing one, which makes adoption a training problem rather than a
+redundancy problem; and there is no key-person risk to cite as urgency.
+
+Overall pace is consistent (median 11.0–13.7s per execution). The variation
+is *within* processes:
+
+| process | operators | fastest median | slowest median | spread |
+|---|---|---|---|---|
+| `hr_welfare_application` | 3 | 8.7s | 29.4s | **3.40×** |
+| `hr_onboarding_verification` | 4 | 19.0s | 45.1s | **2.37×** |
+| `fin_budget_variance_analysis` | 3 | 12.5s | 23.8s | 1.91× |
+| `inv_contract_management` | 4 | 13.6s | 25.7s | 1.89× |
+| `fin_invoice_matching` | 4 | 14.0s | 18.6s | 1.34× |
+| `inv_stock_adjustment` | 4 | 8.1s | 10.6s | 1.31× |
+
+A 2–3× spread between operators on an identical procedure means it is being
+applied inconsistently — which is an argument for standardising it, and is
+worth more than the raw time saved. Note that the two widest spreads
+(`hr_welfare_application`, `hr_onboarding_verification`) are *not* in the
+chosen scope: they rank 13th and 9th on volume and integration cost. That is
+a genuine tension in the recommendation, and the honest reading is that this
+sample (16 and 31 executions) is too thin to separate inconsistent practice
+from a few slow cases.
+
+### What the tool would not remove
+
+| process | total s | portal-only s | desktop-involved s | addressable |
+|---|---|---|---|---|
+| `hr_leave_application` | 690.4 | 682.0 | 8.4 | **98.8%** |
+| `hr_expense_settlement` | 972.5 | 491.7 | 480.8 | 50.6% |
+| `fin_purchase_order_management` | 863.9 | 559.1 | 304.8 | 64.7% |
+
+**1,733s of 2,527s (68.6%)** of the targeted work is portal-only and
+therefore addressable. The other **794s involves Word, Excel or Notepad and
+stays manual** in this phase.
+
+That 68.6% is the ceiling, not the expectation. Three deductions on top:
+
+1. **Review time is retained in full.** The tool prepares and a human
+   commits, so the operator still reads every case.
+2. **The submit may stay manual** — see §6. If the approval endpoint cannot be
+   driven, the tool saves navigation and data entry but not the final click.
+3. **`hr_expense_settlement` is half desktop work.** Its 90 executions are the
+   volume argument for including it, but only 492s of its 972s is reachable.
+
+So the realistic claim is *"compresses the portal half of three processes,
+with a human still reviewing each case"* — not a headline percentage. The
+README warns that proposals built on optimistic assumptions score badly, and
+a 68.6% figure quoted without these three deductions would be exactly that.
+
+## 10. Carried into Day 4
 
 1. **Verify the submit path first.** If approval cannot be driven
    programmatically, the tool becomes a preparation-and-checklist surface

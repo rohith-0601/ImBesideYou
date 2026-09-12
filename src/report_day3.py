@@ -13,8 +13,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from analyze_day3 import (app_surface, build_executions, per_process, score,
-                          systems_per_process, variant_table)
+from analyze_day3 import (TARGET_PROCESSES, app_surface, build_executions,
+                          operator_spread, per_operator, per_process,
+                          residual_work, score, systems_per_process,
+                          variant_table)
 from data_loader import DATASET_B_ROOTS, load_events
 from process_context import annotate
 from segment import segment
@@ -65,6 +67,9 @@ def main() -> None:
     ranked = score(stats, sysmap, surface)
     variants = variant_table(ex)
     sens = sensitivity(ranked)
+    ops = per_operator(ex)
+    spread = operator_spread(ex)
+    residual = residual_work(ev, ex, TARGET_PROCESSES)
 
     real = ranked[ranked.executions >= 5].copy()
 
@@ -114,7 +119,30 @@ def main() -> None:
             A(f"| {r.variant} | {r.n} | {r.median_s} | {r.exception_rate:.1%} |")
         A("")
 
-    A("## 3. Integration surface\n")
+    A("## 3. Who does the work\n")
+    A("| operator | executions | distinct processes | sessions | total s | median s |")
+    A("|---|---|---|---|---|---|")
+    for r in ops.itertuples():
+        A(f"| `…{r.operator}` | {r.executions} | {r.processes} | {r.sessions} | "
+          f"{r.total_s} | {r.median_s} |")
+    A("")
+    A(f"Four operators, each touching **{ops.processes.min()}–{ops.processes.max()} "
+      f"of the {len(real)} processes**. Nobody is a specialist and no process "
+      f"is one person's silo, so automating any single process affects all "
+      f"four operators rather than displacing one. Median time per execution "
+      f"is within {ops.median_s.min()}–{ops.median_s.max()}s across all of "
+      f"them, so they work at comparable speed overall.\n")
+    A("Where they differ is by process — a wide spread on an identical "
+      "procedure suggests it is being applied inconsistently, which is itself "
+      "an argument for automating it:\n")
+    A("| process | operators | fastest median s | slowest median s | spread |")
+    A("|---|---|---|---|---|")
+    for r in spread.head(8).itertuples():
+        A(f"| `{r.label}` | {r.operators} | {r.fastest_median_s} | "
+          f"{r.slowest_median_s} | {r.spread_x}x |")
+    A("")
+
+    A("## 4. Integration surface\n")
     A("Whether a process can be driven through the portal alone, or also "
       "needs a desktop application. This is the dominant cost difference "
       "between candidates.\n")
@@ -131,21 +159,45 @@ def main() -> None:
       f"inside one system; it is the desktop applications, not cross-system "
       f"navigation, that drive integration cost.\n")
 
-    A("## 4. Ranked automation candidates\n")
+    A("## 5. Ranked automation candidates\n")
     A("```\n"
       "opportunity = (volume + time_share)/2 x determinism x data_access\n"
       "              ----------------------------------------------------\n"
       "                                branch_cost\n"
       "```\n")
-    A("| # | process | executions | total s | determinism | browser-only | variants | **opportunity** |")
-    A("|---|---|---|---|---|---|---|---|")
+    A("| # | process | executions | total s | determinism | exceptions | browser-only | variants | **opportunity** |")
+    A("|---|---|---|---|---|---|---|---|---|")
     for i, r in enumerate(real.itertuples(), 1):
         A(f"| {i} | `{r.label_final}` | {r.executions} | {r.total_s:.0f} | "
-          f"{r.determinism:.3f} | {r.data_access:.3f} | {r.variants} | "
-          f"**{r.opportunity:.3f}** |")
+          f"{r.determinism:.3f} | {r.exception_nature} | {r.data_access:.3f} | "
+          f"{r.variants} | **{r.opportunity:.3f}** |")
     A("")
+    A("`exceptions` distinguishes an exception that is a labelled property of "
+      "the case (`predictable` — one branch to implement) from one discovered "
+      "during the work and unpredictable from anything the log captures "
+      "(`judgement` — work a machine cannot take over). Only the latter "
+      "reduces `determinism`. See the module docstring in "
+      "`src/analyze_day3.py` for the measurements behind each assignment.\n")
 
-    A("## 5. Sensitivity of the ranking\n")
+    A("## 5b. What would remain manual, for the chosen scope\n")
+    A("Observed time for the three target processes, split into the part "
+      "spent in the portal and the part that pulls in Word, Excel or "
+      "Notepad. The tool addresses the former; the latter is untouched in "
+      "this phase. Review time is retained in full on top of this, because "
+      "the tool prepares and a human commits.\n")
+    A("| process | executions | total s | portal-only s | desktop-involved s | addressable |")
+    A("|---|---|---|---|---|---|")
+    for r in residual.itertuples():
+        A(f"| `{r.label}` | {r.executions} | {r.total_s} | {r.portal_only_s} | "
+          f"{r.desktop_involved_s} | {r.addressable_share:.1%} |")
+    tot = residual.total_s.sum()
+    add = residual.portal_only_s.sum()
+    A("")
+    A(f"**{add:.0f}s of {tot:.0f}s ({100 * add / tot:.1f}%)** of the targeted "
+      f"work is portal-only and therefore addressable. The remaining "
+      f"{tot - add:.0f}s involves a desktop application and stays manual.\n")
+
+    A("## 6. Sensitivity of the ranking\n")
     A("Rank of each process under alternative weightings. A recommendation "
       "that only survives one formula is not a recommendation.\n")
     keep = [l for l in real.label_final]
