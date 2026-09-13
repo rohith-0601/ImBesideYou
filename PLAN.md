@@ -166,9 +166,20 @@ Built `portal/contract.json` (13 screen contracts) and `portal/processes/*.json`
 (3 validated definitions). See
 [`reports/day4_findings.md`](reports/day4_findings.md).
 
-**Not done: the web app scaffold.** The first item consumed the day. Recorded
-as a schedule risk — Day 5 now carries the scaffold and the core build, with
-the mock generatable directly from `contract.json`.
+**Then built the scaffold after all**, so the schedule risk did not carry.
+Stack is Express + React on Rohith's call, which put a useful seam in the
+project: Python derives the portal contract from the logs, Node consumes it,
+and the JSON artefacts are the interface. 420 real records harvested from the
+screen dumps back a mock that enforces the recovered state machine; the HTTP
+client is a deliberate stub whose methods throw with the specific unknown each
+one needs answered.
+
+**The result that matters:** running the assist logic over the real queues,
+`hr_leave_application` is 40/40 ready and `hr_expense_settlement` 84/213 — but
+**`fin_purchase_order_management`, the top-ranked candidate, is 0 of 81.** Its
+list view does not carry the field that decides the branch. The Day 3 scoring
+never asked whether the deciding field is on the screen the tool reads, which
+is a gap in the model rather than in that one process.
 
 ## Day 5 — Step 3 scaffold + core build (carries Day 4's scaffold)
 
@@ -176,10 +187,15 @@ the mock generatable directly from `contract.json`.
   vocabularies, real records harvested from the dumps.
 - Scaffold the web app with the portal adapter behind an interface, so the
   mock swaps for a real client without touching the tool.
-- Handle `fin_purchase_order_management`'s per-record fetch: its list view
-  does not expose the order type that decides the branch, so each record must
-  be opened to classify it — unlike the other two processes.
-- Build the actual automation path end to end for the chosen process.
+- **First: re-check every deferred candidate for the "is the deciding field
+  even on the screen?" problem.** Day 4 found the top-ranked process is 0/81
+  automatable because of it, and the Day 3 scoring model does not ask the
+  question. Any candidate promoted without that check could fail the same way.
+- Decide what to do about `fin_purchase_order_management`: either drop it from
+  scope, or add the per-record fetch and accept that its integration is
+  larger than the other two.
+- Harden the flow: bulk approve, keyboard-driven review, and a visible audit
+  trail of what was submitted.
 - Human-in-the-loop by default: the operator reviews and approves rather
   than the tool acting blind — chosen because these are HR/payroll records
   where a silent wrong write is expensive.

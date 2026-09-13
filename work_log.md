@@ -676,17 +676,82 @@ record. So this process needs a per-record fetch that the other two don't, to
 classify each case before acting. Recorded as `variant_source: record_detail`
 and flagged for Day 5, rather than discovered mid-implementation.
 
-### What I did not finish
+### Second pass: the scaffold, after all
 
-**The web app scaffold.** Day 4 had four planned items; the first expanded
-into the bug, the correction and the contract reconstruction. I judged
-finishing those worth more than starting a scaffold on top of a contract I
-already knew was wrong in at least one place.
+I had written the scaffold off as a schedule risk for Day 5. With the contract
+settled it turned out to be reachable the same day, so I built it rather than
+carry the risk.
 
-Day 5 now carries the scaffold *and* the core build. That is a real schedule
-risk and I'm recording it as one. The mitigation is that the mock portal can
-be generated directly from `contract.json` rather than designed — a smaller
-job than it would have been this morning.
+**Stack changed twice, on request, and the second change improved the
+design.** I started on Python `http.server` (no dependencies, runs from a
+fresh clone). Rohith asked for React, so the front end became Vite + React —
+node 26 and the npm registry were both available, so a proper build rather
+than CDN script tags. Then he asked for an Express backend, which I initially
+read as a lateral move and it isn't: it puts a clean seam in the project.
+**Python is now the analysis pipeline that derives the portal contract from
+the logs; Node/Express is the tool that consumes it.** The JSON artefacts
+(`contract.json`, `records.json`, `processes/*.json`) are the interface
+between them. I deleted the Python `portal_client.py` and `assist.py` rather
+than keep two implementations to drift apart.
+
+**What got built:**
+
+- `src/harvest_records.py` — pulls **420 real records** out of the recorded
+  screen dumps. Not synthetic: every one was on an operator's screen. Keeps
+  the *earliest* observed status per record, so the mock starts in the state
+  the operator found it in and a run is reproducible.
+- `server/portalClient.js` — the adapter seam. `MockPortalClient` enforces the
+  real state machine from `contract.json`; `HttpPortalClient` is a deliberate
+  stub whose three methods throw with the specific question each needs
+  answered against a live instance. Putting the unknowns in code rather than
+  in a report paragraph is the point.
+- `server/assist.js` — drafts the completion comment from the record's own
+  fields, and marks what it cannot decide.
+- `server/index.js` — Express API.
+- `web/` — React front end: process tabs, a queue split into *ready* and
+  *needs review*, and a card per record showing the drafted comment and the
+  tool's reasoning.
+
+**Verified end to end:** Express serves the queue, Vite proxies to it, a
+submit returns 申請を承認しました and decrements the pending count, a repeat
+submit is refused, an empty comment is refused, and `vite build` compiles
+clean (31 modules).
+
+### The number that matters most
+
+Running the assist logic over the real queues:
+
+| process | pending | ready | needs review |
+|---|---|---|---|
+| `hr_leave_application` | 40 | **40** | 0 |
+| `hr_expense_settlement` | 213 | 84 | 129 |
+| `fin_purchase_order_management` | 81 | **0** | 81 |
+
+**My top-ranked candidate is currently 0% automatable.** `fin_purchase_order_management`
+ranked first on Day 3's scoring, and not one of its 81 pending records can be
+drafted, because the list view does not carry the order type that decides the
+branch — the constraint the validator surfaced this morning, now quantified
+against real data.
+
+That is worth more than a working demo. The Day 3 ranking scored volume, time,
+determinism and *app* surface, but never asked whether the deciding field is
+actually on the screen the tool reads. It is a gap in the scoring model, not
+just in this one process, and Day 5 should check the same question for every
+deferred candidate before anything else gets promoted.
+
+`hr_expense_settlement`'s 129 reviews are different and expected — those are
+`種別: 調整` records the definition deliberately flags as exceptions.
+
+### What I deliberately did not build
+
+**Auto-approval.** Every proposal carries `needs_review` and nothing submits
+without an explicit POST. Two reasons from the data rather than caution for
+its own sake: the submit transport is unverified, and policy limits are
+unknown — every observed expense case was approved, so a tool that
+auto-approved against an inferred threshold would be inventing the rule it
+claims to enforce. The drafted comment says 規程内であることを確認した
+("confirmed within policy") and the tool has no policy to confirm against; a
+human still does that part.
 
 ### Decisions taken
 
@@ -718,3 +783,8 @@ translated with the model's help.
 | `portal/contract.json` | 13 screen contracts: columns, states, transitions, confirmations |
 | `portal/processes/*.json` | 3 validated definitions for the chosen scope |
 | `reports/day4_findings.md` | the bug, the correction, the contract, the schedule risk |
+| `src/harvest_records.py` | pulls 420 real records out of the screen dumps |
+| `portal/records.json` | the harvested records the mock serves |
+| `server/` | Express API: portal adapter, assist logic, routes |
+| `web/` | React front end (Vite) |
+| `RUNNING.md` | how to run both halves, and what to expect |

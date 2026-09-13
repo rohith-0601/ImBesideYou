@@ -1,0 +1,99 @@
+"""
+Harvest real portal records out of the recorded screen dumps.
+
+The mock portal the Step 3 tool runs against is not invented data. Every
+record below was on a real operator's screen during the July 2026 recording
+and was parsed out of `context.extracted_text` by `portal_contract.py`.
+
+Using real records matters for more than realism. The rule logic, the comment
+templates and the variant handling all have to cope with the actual
+distribution — the amounts that really occur, the categories that really
+appear, the proportion of records already completed — and synthetic data would
+quietly smooth over exactly the cases that break things.
+
+Records are keyed by their portal ID (`P2-07047510-001`). Where the same ID is
+seen in several dumps at different times, the **earliest** observed status is
+kept, so the mock starts in the state the operator found it in rather than
+the state they left it in. That is what makes the tool's work reproducible:
+re-running it re-processes the same pending queue.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+OUT = REPO_ROOT / "portal" / "records.json"
+
+# Screen title -> the process definition that drives it.
+SCREEN_TO_PROCESS = {
+    "勤怠・休暇申請": "hr_leave_application",
+    "経費精算・給与変更": "hr_expense_settlement",
+    "発注管理": "fin_purchase_order_management",
+}
+
+
+def harvest(events) -> dict:
+    from portal_contract import RECORD_ID_RE, parse_screen, _screen_blocks
+
+    # record_id -> (first_seen_ms, row, screen)
+    best: dict[str, tuple[int, dict, str]] = {}
+    for blk in _screen_blocks(events):
+        parsed = parse_screen(blk["text"])
+        if not parsed or not parsed["rows"]:
+            continue
+        screen = parsed["title"]
+        if screen not in SCREEN_TO_PROCESS:
+            continue
+        for row in parsed["rows"]:
+            rid = row.get("ID")
+            status = row.get("ステータス")
+            if not rid or not RECORD_ID_RE.match(rid):
+                continue
+            if not status or RECORD_ID_RE.match(status):
+                continue
+            prev = best.get(rid)
+            if prev is None or blk["timestamp_ms"] < prev[0]:
+                best[rid] = (blk["timestamp_ms"], row, screen)
+
+    out: dict[str, list[dict]] = {p: [] for p in SCREEN_TO_PROCESS.values()}
+    for rid, (ts, row, screen) in sorted(best.items()):
+        process = SCREEN_TO_PROCESS[screen]
+        rec = {k: v for k, v in row.items()}
+        rec["_first_seen_ms"] = ts
+        out[process].append(rec)
+    for p in out:
+        out[p].sort(key=lambda r: r["ID"])
+    return out
+
+
+def main() -> None:
+    from data_loader import DATASET_B_ROOTS, load_events
+    from process_context import annotate
+    from process_defs import DEFINITIONS
+
+    ev = annotate(load_events(DATASET_B_ROOTS))
+    records = harvest(ev)
+
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(json.dumps(records, ensure_ascii=False, indent=2),
+                   encoding="utf-8")
+    print(f"\nharvested -> {OUT.relative_to(REPO_ROOT)}")
+    for process, recs in records.items():
+        defn = DEFINITIONS[process]
+        pending = defn["states"]["pending"]
+        n_pending = sum(1 for r in recs if r.get("ステータス") == pending)
+        statuses = {}
+        for r in recs:
+            statuses[r.get("ステータス")] = statuses.get(r.get("ステータス"), 0) + 1
+        print(f"\n{process}")
+        print(f"    records : {len(recs)}")
+        print(f"    pending : {n_pending}  (status {pending!r})")
+        print(f"    statuses: {statuses}")
+        if recs:
+            print(f"    sample  : {json.dumps({k: v for k, v in recs[0].items() if not k.startswith('_')}, ensure_ascii=False)}")
+
+
+if __name__ == "__main__":
+    main()
