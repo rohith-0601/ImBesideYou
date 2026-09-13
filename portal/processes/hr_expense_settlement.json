@@ -1,0 +1,51 @@
+{
+  "label": "hr_expense_settlement",
+  "display_name": "経費精算（確認）",
+  "system": {
+    "name": "HR人事給与システム",
+    "port": "5132"
+  },
+  "route": "#/payroll-items",
+  "columns": [
+    "ID",
+    "社員ID",
+    "氏名",
+    "区分",
+    "金額",
+    "種別",
+    "ステータス"
+  ],
+  "states": {
+    "pending": "未処理",
+    "done": "登録済み"
+  },
+  "transition": "未処理 -> 登録済み",
+  "transitions_observed": 83,
+  "confirmation": "登録確定しました",
+  "comment_template": "経費精算確認済み。費目：{variant}　金額：{amount}円。規程内であることを確認した。",
+  "variant_field": "区分",
+  "variants": [
+    "交通費精算",
+    "出張旅費",
+    "消耗品費",
+    "研修費",
+    "接待交際費"
+  ],
+  "exception_field": "種別",
+  "exception_values": [
+    "調整"
+  ],
+  "rule": {
+    "checks": [
+      "金額 is within the policy limit for 区分"
+    ],
+    "threshold": null,
+    "note": "Observed amounts per category are 交通費精算 5,083-24,395; 消耗品費 4,354-29,889; 研修費 11,116-55,571; 出張旅費 21,956-79,409; 接待交際費 60,936-135,181. These are observed RANGES, not limits — every recorded case was approved, so no rejection boundary is visible. Limits must be supplied by the client."
+  },
+  "evidence": {
+    "executions": 90,
+    "operators": 3,
+    "browser_only_share": 0.567,
+    "exception_rate": 0.0
+  }
+}

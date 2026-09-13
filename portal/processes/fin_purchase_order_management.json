@@ -1,0 +1,51 @@
+{
+  "label": "fin_purchase_order_management",
+  "display_name": "発注管理",
+  "system": {
+    "name": "財務会計システム",
+    "port": "5133"
+  },
+  "route": "#/resident-tax",
+  "columns": [
+    "ID",
+    "社員ID",
+    "氏名",
+    "項目",
+    "金額",
+    "ステータス"
+  ],
+  "states": {
+    "pending": "未確認",
+    "done": "完了"
+  },
+  "transition": "未確認 -> 完了",
+  "transitions_observed": 26,
+  "confirmation": "完了しました",
+  "comment_template": "発注管理処理。{variant}：{item}　数量 {qty}　合計 {amount}円　{urgency}。発注書確認・登録完了。",
+  "variant_field": null,
+  "variant_source": "record_detail",
+  "variants": [
+    "年間契約",
+    "スポット発注",
+    "定期発注",
+    "緊急発注"
+  ],
+  "exception_field": null,
+  "exception_values": [
+    "緊急発注"
+  ],
+  "rule": {
+    "checks": [
+      "発注区分 determines routing",
+      "緊急発注 is flagged for expedited handling"
+    ],
+    "threshold": null,
+    "note": "Exception rate by variant is exactly 1.0 for 緊急発注 and 0.0 for the other three, so the branch is a labelled property of the order. But it is not visible in the list view, so it is known only after opening the record — a per-record fetch the other two processes do not need. Day 5 build risk."
+  },
+  "evidence": {
+    "executions": 68,
+    "operators": 4,
+    "browser_only_share": 0.735,
+    "exception_rate": 0.132
+  }
+}

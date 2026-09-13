@@ -112,7 +112,10 @@ def text_surfaces(row) -> list[str]:
             v = _dig(p, *path)
             if isinstance(v, str):
                 out.append(v)
-    for col in ("extracted_text", "window_title", "browser_tab_title"):
+    # NOTE: `screen_text`, not `extracted_text` — the latter is a dict and an
+    # isinstance(str) test against it silently matches nothing. See
+    # data_loader._screen_text.
+    for col in ("screen_text", "window_title", "browser_tab_title"):
         v = row.get(col)
         if isinstance(v, str):
             out.append(v)

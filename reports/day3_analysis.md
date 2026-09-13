@@ -75,6 +75,13 @@ The README asks whether the same process is handled differently case to case. It
 | 出荷引当 | 3 | 18.2 | 0.0% |
 | 入庫 | 1 | 4.5 | 0.0% |
 
+**`fin_invoice_matching`** — 2 patterns
+
+| variant | n | median s | exception rate |
+|---|---|---|---|
+| 差異なし承認 | 42 | 14.7 | 0.0% |
+| 差異あり要確認 | 22 | 16.8 | 100.0% |
+
 **`inv_it_request_processing`** — 5 patterns
 
 | variant | n | median s | exception rate |
@@ -93,13 +100,6 @@ The README asks whether the same process is handled differently case to case. It
 | 前払い申請, 承認, 振込実行 | 9 | 23.9 | 0.0% |
 | 請求書照合, 支払予定表, 振込実行 | 7 | 20.5 | 0.0% |
 | 請求書照合, 支払予定表, 振込実行, 支払通知 | 4 | 20.2 | 0.0% |
-
-**`fin_invoice_matching`** — 2 patterns
-
-| variant | n | median s | exception rate |
-|---|---|---|---|
-| 差異なし承認 | 42 | 14.7 | 0.0% |
-| 差異あり要確認 | 22 | 16.8 | 100.0% |
 
 **`inv_contract_management`** — 5 patterns
 
@@ -255,9 +255,9 @@ opportunity = (volume + time_share)/2 x determinism x data_access
 | 2 | `hr_leave_application` | 56 | 690 | 1.000 | none | 0.964 | 5 | **0.351** |
 | 3 | `hr_expense_settlement` | 90 | 972 | 1.000 | none | 0.567 | 5 | **0.333** |
 | 4 | `inv_stock_adjustment` | 81 | 827 | 1.000 | none | 0.580 | 11 | **0.213** |
-| 5 | `inv_it_request_processing` | 45 | 528 | 1.000 | none | 0.578 | 5 | **0.156** |
-| 6 | `fin_payment_processing` | 36 | 676 | 1.000 | none | 0.417 | 4 | **0.125** |
-| 7 | `fin_invoice_matching` | 64 | 1288 | 0.656 | judgement | 0.250 | 2 | **0.118** |
+| 5 | `fin_invoice_matching` | 64 | 1288 | 1.000 | predictable | 0.250 | 2 | **0.180** |
+| 6 | `inv_it_request_processing` | 45 | 528 | 1.000 | none | 0.578 | 5 | **0.156** |
+| 7 | `fin_payment_processing` | 36 | 676 | 1.000 | none | 0.417 | 4 | **0.125** |
 | 8 | `inv_contract_management` | 47 | 1186 | 1.000 | none | 0.200 | 5 | **0.097** |
 | 9 | `hr_onboarding_verification` | 31 | 1131 | 1.000 | none | 0.200 | 4 | **0.087** |
 | 10 | `hr_payroll_change` | 19 | 294 | 1.000 | none | 0.789 | 5 | **0.074** |
@@ -288,13 +288,13 @@ Rank of each process under alternative weightings. A recommendation that only su
 | `fin_purchase_order_management` | 1 | 2 | 1 | 5 | 1 |
 | `hr_leave_application` | 2 | 1 | 2 | 7 | 2 |
 | `hr_expense_settlement` | 3 | 3 | 3 | 1 | 3 |
-| `inv_stock_adjustment` | 4 | 4 | 4 | 3 | 4 |
-| `inv_it_request_processing` | 5 | 5 | 9 | 9 | 5 |
-| `fin_payment_processing` | 6 | 6 | 6 | 8 | 6 |
-| `fin_invoice_matching` | 7 | 8 | 5 | 2 | 7 |
+| `inv_stock_adjustment` | 4 | 4 | 5 | 3 | 4 |
+| `fin_invoice_matching` | 5 | 6 | 4 | 2 | 5 |
+| `inv_it_request_processing` | 6 | 5 | 9 | 9 | 6 |
+| `fin_payment_processing` | 7 | 7 | 6 | 8 | 7 |
 | `inv_contract_management` | 8 | 10 | 8 | 4 | 8 |
 | `hr_onboarding_verification` | 9 | 11 | 7 | 6 | 9 |
-| `hr_payroll_change` | 10 | 7 | 13 | 13 | 10 |
+| `hr_payroll_change` | 10 | 8 | 13 | 13 | 10 |
 | `fin_expense_approval` | 11 | 9 | 10 | 10 | 11 |
 | `fin_budget_variance_analysis` | 12 | 12 | 11 | 12 | 12 |
 | `hr_welfare_application` | 13 | 13 | 12 | 11 | 13 |

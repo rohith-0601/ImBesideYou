@@ -571,3 +571,150 @@ because a single composite number is a fragile basis for a recommendation.
 | `reports/day3_analysis.md` | generated Step 2 tables and the ranking |
 | `reports/day3_findings.md` | curated findings, risks, and the Step 3 decision |
 | `segments/segments.jsonl` | regenerated with comment-corrected labels |
+
+
+---
+
+## Day 4
+
+**Goal:** verify the submit path against the real portals — the thing Day 3
+identified as the biggest risk — then scaffold the app and define the
+per-process schema.
+
+The verification took a different route than planned, and on the way it
+exposed a bug that had been quietly suppressing the richest source in the
+dataset since Day 1.
+
+### What I did
+
+1. **Checked whether the portals are reachable.** They are not — they ran on
+   the client's Windows machines in July 2026 and nothing is listening here.
+2. **Went looking for what the logs could tell me about the portal instead**,
+   starting with `context.extracted_text`.
+3. **Found the bug**, fixed it in `data_loader`, and re-examined what it
+   unlocked.
+4. **Re-tested a Day 3 conclusion** that had rested on the suppressed data.
+5. **Wrote `src/portal_contract.py`** to reconstruct the portal's data
+   contract from 939 screen dumps.
+6. **Wrote `src/process_defs.py`** — the per-process definition schema, with
+   a validator, plus the three definitions for the chosen scope.
+
+### The bug
+
+`context.extracted_text` is a **dict**, not a string:
+
+```python
+{"text": "...", "source": "text_pattern", "char_count": 890, "truncated": False}
+```
+
+Every guard I had written against it since Day 1 was `isinstance(x, str)`.
+That matches nothing. **939 screen dumps, 633,859 characters, never read** —
+not by `case_extract.text_surfaces`, not by the Day 3 probe that went hunting
+for the 種別 column and reported it absent.
+
+This is the failure mode I keep having to watch for: nothing errors, a filter
+just returns empty, and an empty result is indistinguishable from a real
+negative finding. Day 3 stated "the 種別 column never appears in the event log
+at all" with apparent evidence behind it, and that sentence was a type
+mismatch. I now expose a flattened `screen_text` column so the same mistake
+can't be made again.
+
+### What that overturned
+
+**Day 3's central claim about invoice matching was wrong.** Joining the 64
+invoices present in both a screen dump and a completion comment:
+定常 → 差異なし承認 in **42/42**, 調整 → 差異あり要確認 in **22/22**. The
+discrepancy outcome is a deterministic function of a column that is on screen,
+in the log, and visible before the work starts. Not judgement at all.
+
+Reclassified, `fin_invoice_matching` rises from 7th to 5th. **The scope
+decision holds — but on a different reason.** It is no longer "unpredictable
+judgement", it is "predictable but desktop-heavy" (25% browser-only). I'd
+rather the deferral be right for the right reason.
+
+### What the screen dumps gave me
+
+Full list views with column headers, every row, and the confirmation toast
+after an action. Enough to reconstruct each screen's record schema, status
+vocabulary and state machine.
+
+**Every screen is a two-state machine with exactly one transition** —
+申請中→承認, 未処理→登録済み, 照合中→完了, 処理待ち→処理完了, 未確認→完了 —
+each with a known confirmation string, across **345 observed transitions**.
+
+So Day 3's "the terminal action is invisible" needed narrowing rather than
+retracting. The button clicks really are absent (7 `✓ 承認` in 20,477 events),
+but the *effect* of every submit is recorded. We know what a submit does and
+what the system says back; we don't know how to invoke it. That is an
+integration unknown, not a semantic one — the difference between "we don't
+understand the process" and "we need an hour with the API".
+
+### What didn't work
+
+- **My first row parser assumed fixed-width rows.** 発注管理 leaves 金額
+  empty, the blank line vanishes when empty lines are stripped, and every
+  subsequent row desynchronised — producing a screen with *no statuses at
+  all*. It looked like the screen simply had no status column. Rewrote to
+  split on record-id boundaries.
+- **Then the toast got absorbed into the last row's status cell**, giving
+  statuses like `P10-07040532-004: 完了しました` and transitions between two
+  toasts. Fixed by finding the toast boundary first.
+- **Keying the contract on the forward-filled process label mixed screens
+  together** — `hr_welfare_application` came back titled 契約管理. The screen
+  prints its own title, which can't drift, so I key on that instead.
+- **The validator rejected my own first process definition** ten seconds after
+  I wrote it: `exception_field: 変異` is not a column on that screen. Chasing
+  it produced a genuine build constraint (below), which is the best argument
+  I have for having written the validator at all.
+
+### The constraint the validator surfaced
+
+The 発注管理 list view shows only `発注管理 PO-2026-5156` in its 項目 column.
+**The order type that determines the branch is not in the list at all** — it
+appears only in the completion comment, i.e. after the worker has opened the
+record. So this process needs a per-record fetch that the other two don't, to
+classify each case before acting. Recorded as `variant_source: record_detail`
+and flagged for Day 5, rather than discovered mid-implementation.
+
+### What I did not finish
+
+**The web app scaffold.** Day 4 had four planned items; the first expanded
+into the bug, the correction and the contract reconstruction. I judged
+finishing those worth more than starting a scaffold on top of a contract I
+already knew was wrong in at least one place.
+
+Day 5 now carries the scaffold *and* the core build. That is a real schedule
+risk and I'm recording it as one. The mitigation is that the mock portal can
+be generated directly from `contract.json` rather than designed — a smaller
+job than it would have been this morning.
+
+### Decisions taken
+
+- **Build against a mock reconstructed from `contract.json`**, with the portal
+  adapter behind an interface so it can be swapped for a real client. Given
+  the portals are unreachable, the alternative is not building at all.
+- **Key the contract on screen title, not process label.** The title is
+  printed by the screen; the label is inferred and can drift.
+- **Policy thresholds stay configuration.** Still not inferable — every
+  observed case was approved, so the data shows ranges and never a limit.
+- **`fin_invoice_matching` stays deferred**, on the corrected reason.
+
+### Generative AI usage
+
+Claude Code (Opus 5). The screen-dump parser went through four iterations, and
+every one of its bugs was found by printing the parsed output and not
+believing it — fixed-width rows, the absorbed toast, the label-keyed
+contamination. The 種別 correlation was a hypothesis the model proposed once
+the screen text became visible; I tested it as a join rather than accepting
+it. Japanese portal vocabulary (未確認, 照合中, 登録確定しました, 発注区分)
+translated with the model's help.
+
+### Artifacts
+
+| file | what it is |
+|---|---|
+| `src/portal_contract.py` | reconstructs the portal contract from screen dumps |
+| `src/process_defs.py` | per-process definition schema + validator |
+| `portal/contract.json` | 13 screen contracts: columns, states, transitions, confirmations |
+| `portal/processes/*.json` | 3 validated definitions for the chosen scope |
+| `reports/day4_findings.md` | the bug, the correction, the contract, the schedule risk |

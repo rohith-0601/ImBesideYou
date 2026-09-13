@@ -79,6 +79,14 @@ Exception rate by variant is exactly **1.0 for 緊急発注** and exactly **0.0*
 for スポット発注, 定期発注 and 年間契約. The exception is a labelled property
 of the order, known before the work starts. Supporting it is one branch.
 
+> **Corrected on Day 4.** The claim below is wrong. The 種別 column *is* in
+> the log — `extracted_text` is a dict, and the `isinstance(str)` guard used
+> to search it matched nothing. 種別 predicts the outcome **64/64 (100%)**.
+> `fin_invoice_matching` is reclassified `predictable` and rises to 5th. It
+> stays deferred, but because it is desktop-heavy (25% browser-only), not
+> because it needs judgement. See
+> [`day4_findings.md`](day4_findings.md) §4.
+
 **`fin_invoice_matching` — 34.4% exceptions, not predictable from anything
 captured.** Amount does not predict the branch: 差異あり averages ¥1,030,094
 against ¥1,299,373 for 差異なし, medians ¥665,036 vs ¥697,654, fully
@@ -135,6 +143,12 @@ Because the three are so close, the scope decision below takes all three
 rather than resting on which of them happens to be first.
 
 ## 6. The most important feasibility finding: the terminal action is invisible
+
+> **Narrowed on Day 4.** The button clicks are indeed absent, but the *effect*
+> of each submit is recorded: 345 status transitions across 11 screens, each
+> with its confirmation message. The submit *semantics* are established; only
+> the *transport* (endpoint, payload, auth, idempotency) remains unknown. See
+> [`day4_findings.md`](day4_findings.md) §5.
 
 Across all 20,477 events there are **7 `✓ 承認` clicks and 4 `⏸ 保留` clicks**.
 Only 1.6% of `fin_invoice_matching` executions contain an approve-style click

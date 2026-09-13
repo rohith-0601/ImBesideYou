@@ -38,13 +38,18 @@ very different situations:
   exactly 1.0 for 緊急発注 and exactly 0.0 for スポット発注 / 定期発注 /
   年間契約. The exception is a **labelled property of the order, known before
   the work starts**. Supporting it is one branch.
-* `fin_invoice_matching` has a 34.4% exception rate (差異あり要確認), and
-  nothing captured predicts it. Amount does not: 差異あり averages
-  ¥1,030,094 against ¥1,299,373 for 差異なし, with medians of ¥665,036 and
-  ¥697,654 and fully overlapping ranges. The 種別 column visible in the
-  screenshots (調整 / 定常) **never appears in the event log at all** — not in
-  `extracted_text`, not in any element name. The discrepancy is *discovered by
-  doing the comparison*, against data the recording does not carry.
+* `fin_invoice_matching` has a 34.4% exception rate (差異あり要確認), and it is
+  **also fully predictable** — corrected on Day 4. Amount does not predict it
+  (差異あり averages ¥1,030,094 against ¥1,299,373, medians ¥665,036 and
+  ¥697,654, fully overlapping). But the 種別 column does, perfectly: across
+  the 64 invoices that appear in both a screen dump and a completion comment,
+  **定常 → 差異なし承認 in 42/42 and 調整 → 差異あり要確認 in 22/22 (64/64,
+  100%)**.
+
+  Day 3 claimed that column "never appears in the event log at all". That was
+  false, and the cause was a bug rather than a judgement: `extracted_text` is
+  a dict, so the `isinstance(x, str)` guard used to search it matched nothing.
+  See `reports/day4_findings.md`.
 
 Penalising both at 1 - rate rewarded the wrong candidate. Only unpredictable
 exceptions reduce `determinism` now; predictable ones are charged to
@@ -128,7 +133,8 @@ def apps_per_process(ex: pd.DataFrame) -> dict[str, list[str]]:
 #   none         - no exceptions observed
 EXCEPTION_NATURE = {
     "fin_purchase_order_management": "predictable",  # 緊急発注, rate 1.0 by variant
-    "fin_invoice_matching": "judgement",             # 差異あり; amount does not predict, 種別 never logged
+    # Corrected on Day 4: 種別 (定常/調整) predicts the 差異 outcome 64/64.
+    "fin_invoice_matching": "predictable",
 }
 
 BROWSER_APPS = {"Microsoft Edge"}

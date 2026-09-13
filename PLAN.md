@@ -124,7 +124,7 @@ clicks. The submit action is essentially never captured, so the terminal step
 of every one of these flows is unobserved. See
 [`reports/day3_findings.md`](reports/day3_findings.md) §5.
 
-## Day 4 — Step 3 foundation: web app scaffold + the hard integration
+## Day 4 — Step 3 foundation: portal contract + process schema ✅
 
 - **First: verify the submit path.** Day 3 found the approve action is
   essentially absent from the logs (7 `✓ 承認` clicks in 20,477 events), so
@@ -142,8 +142,43 @@ of every one of these flows is unobserved. See
 - Deliberately front-loaded: if the integration can't work, Day 4 is when to
   find out, not Day 6.
 
-## Day 5 — Step 3 core build
+**Outcome:** the portals are unreachable (they ran on the client's Windows
+machines), so the contract was reconstructed from evidence instead.
 
+Doing that exposed a bug present since Day 1: `context.extracted_text` is a
+**dict**, and every `isinstance(str)` guard against it matched nothing — so
+**939 screen dumps, 633,859 characters** had been invisible. Nothing errored;
+a filter just returned empty, which reads exactly like a negative finding.
+
+That suppressed data **overturned a Day 3 conclusion**: the invoice
+discrepancy branch is not judgement, it is a deterministic function of the
+種別 column (定常→差異なし 42/42, 調整→差異あり 22/22, **64/64**).
+`fin_invoice_matching` moves 7th → 5th. It stays deferred, but because it is
+desktop-heavy rather than unpredictable.
+
+**The submit risk narrowed rather than cleared.** Button clicks are still
+absent, but every submit's *effect* is recorded: each screen is a two-state
+machine with one transition and a known confirmation, over **345 observed
+transitions**. Semantics established; transport (endpoint, payload, auth,
+idempotency) still unknown.
+
+Built `portal/contract.json` (13 screen contracts) and `portal/processes/*.json`
+(3 validated definitions). See
+[`reports/day4_findings.md`](reports/day4_findings.md).
+
+**Not done: the web app scaffold.** The first item consumed the day. Recorded
+as a schedule risk — Day 5 now carries the scaffold and the core build, with
+the mock generatable directly from `contract.json`.
+
+## Day 5 — Step 3 scaffold + core build (carries Day 4's scaffold)
+
+- Generate the mock portal from `contract.json` — real columns, real status
+  vocabularies, real records harvested from the dumps.
+- Scaffold the web app with the portal adapter behind an interface, so the
+  mock swaps for a real client without touching the tool.
+- Handle `fin_purchase_order_management`'s per-record fetch: its list view
+  does not expose the order type that decides the branch, so each record must
+  be opened to classify it — unlike the other two processes.
 - Build the actual automation path end to end for the chosen process.
 - Human-in-the-loop by default: the operator reviews and approves rather
   than the tool acting blind — chosen because these are HR/payroll records

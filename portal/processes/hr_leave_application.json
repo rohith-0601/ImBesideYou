@@ -1,0 +1,50 @@
+{
+  "label": "hr_leave_application",
+  "display_name": "勤怠・休暇申請",
+  "system": {
+    "name": "HR人事給与システム",
+    "port": "5132"
+  },
+  "route": "#/leave-applications",
+  "columns": [
+    "ID",
+    "社員ID",
+    "氏名",
+    "申請種別",
+    "期間・詳細",
+    "部署",
+    "ステータス"
+  ],
+  "states": {
+    "pending": "申請中",
+    "done": "承認"
+  },
+  "transition": "申請中 -> 承認",
+  "transitions_observed": 23,
+  "confirmation": "申請を承認しました",
+  "comment_template": "勤怠申請確認。種別：{variant}。取得日：{date}。問題なし承認。",
+  "variant_field": "申請種別",
+  "variants": [
+    "年次有給休暇",
+    "特別休暇（慶弔）",
+    "代休申請",
+    "半日有給申請",
+    "フレックス変更申請"
+  ],
+  "exception_field": null,
+  "exception_values": [],
+  "rule": {
+    "checks": [
+      "申請種別 is a recognised leave type",
+      "期間・詳細 is a valid future date"
+    ],
+    "threshold": null,
+    "note": "No exceptions observed across 56 executions."
+  },
+  "evidence": {
+    "executions": 56,
+    "operators": 3,
+    "browser_only_share": 0.964,
+    "exception_rate": 0.0
+  }
+}

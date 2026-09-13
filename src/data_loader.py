@@ -42,6 +42,22 @@ DATASET_A_ROOTS = [
 DATASET_B_ROOTS = [REPO_ROOT / "dataset_b"]
 
 
+def _screen_text(extracted) -> str | None:
+    """The text out of a context.extracted_text object.
+
+    Shape is {"text": str, "source": "text_pattern"|"tree_walk",
+    "char_count": int, "truncated": bool}. Returns None when absent or
+    empty so callers can test truthiness safely.
+    """
+    if isinstance(extracted, dict):
+        t = extracted.get("text")
+        if isinstance(t, str) and t.strip():
+            return t
+    elif isinstance(extracted, str) and extracted.strip():
+        return extracted
+    return None
+
+
 def _iter_chunks(roots: list[Path]):
     """Yield (session_id, chunk_id, chunk_dir) for every chunk directory
     found under any of `roots`, deduplicated on (session_id, chunk_id) using
@@ -114,6 +130,14 @@ def load_events(roots: list[Path], verbose: bool = True) -> pd.DataFrame:
                     "browser_url": browser_tab.get("url"),
                     "browser_tab_title": browser_tab.get("title"),
                     "extracted_text": ctx.get("extracted_text"),
+                    # Flattened form. `extracted_text` is a DICT
+                    # ({"text": ..., "source": ..., "char_count": ...}), not
+                    # a string. Every `isinstance(x, str)` guard written
+                    # against it silently matched nothing, which suppressed
+                    # all 939 screen dumps (633,859 characters) from Day 1
+                    # through Day 3. This column exists so that cannot
+                    # happen again.
+                    "screen_text": _screen_text(ctx.get("extracted_text")),
                     "payload": payload,
                 })
 
