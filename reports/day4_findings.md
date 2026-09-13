@@ -162,7 +162,68 @@ schedule risk and is recorded as one rather than absorbed quietly — the
 mitigation is that the mock portal can be generated directly from
 `contract.json`, which is a smaller job than designing it would have been.
 
-## 9. Carried into Day 5
+## 9. The scoring model never asked whether the field is on the screen
+
+Running the prototype over the real queues exposed a gap in the Day 3 scoring
+that is bigger than any single process.
+
+`fin_purchase_order_management` ranked **first** on Day 3 — and **0 of its 81**
+pending records can be drafted, because the order type that decides its branch
+is not on the list screen the tool reads. The score weighed volume, time,
+determinism, integration surface and branch count. It never asked whether the
+deciding field is *visible*.
+
+`src/field_audit.py` runs that check for all thirteen processes, per comment
+slot, using the same condition `server/assist.js` applies when it decides
+whether to draft:
+
+| verdict | processes | executions |
+|---|---|---|
+| `list_sufficient` | 6 | 288 (48%) |
+| `partial` | 4 | 176 |
+| `detail_required` | 3 | 135 |
+
+**311 of 599 executions (52%) sit behind a per-record fetch that does not
+exist yet.** Three processes are fully blocked:
+`fin_purchase_order_management`, `fin_payment_processing`,
+`hr_onboarding_verification`.
+
+The first version of this audit got two processes wrong by comparing each
+process's *variant* values against the list columns. That conflates two
+different things — for `fin_invoice_matching` the variant is the **outcome**
+(差異なし承認 / 差異あり要確認), while the **predictor** is the 種別 column.
+Checking per comment slot instead fixed it and is the condition that actually
+matters.
+
+## 10. `fin_invoice_matching` was deferred twice, for two wrong reasons
+
+It is the largest process by time (1,288s, 64 executions). Day 3 deferred it
+as irreducible judgement; Day 4 §4 corrected that but deferred it again as
+desktop-heavy. Both reasons are now gone:
+
+1. **種別 predicts the outcome 64/64** (§4).
+2. **種別 is an input, not an output.** It is populated on 未処理 rows — 147
+   定常 and 91 調整 while still un-worked — and across **108 records observed
+   more than once, not one changed its 種別**. So the branch is decided before
+   anyone touches the record, and automating against it is not circular.
+   (`field_audit.field_is_an_input` encodes the test.)
+3. **Every comment slot resolves from the list row** (§9).
+
+The 25% browser-only share that justified deferring it measures how the
+*human* did the check — the Excel and Word detour. If the outcome is already
+determined by a field on the record, that detour is the work being removed,
+not a barrier to removing it.
+
+**Added as a fourth process definition.** In the running prototype: 86
+pending, **54 ready** (定常, drafted), 32 routed to a human (調整). The drafted
+comment matches the recorded originals exactly:
+`請求書照合完了。INV-2026-7347　金額：1,832,962円。差異なし承認。`
+
+Stated carefully: 64 observations is a modest sample, and nothing in the logs
+says what sets 種別 upstream. The 調整 arm stays manual. What has changed is
+that the deferral was resting on two claims that turned out to be false.
+
+## 11. Carried into Day 5
 
 1. Generate the mock portal from `contract.json` — real columns, real status
    vocabularies, real records harvested from the dumps.

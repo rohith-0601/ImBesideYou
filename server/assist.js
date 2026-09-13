@@ -19,13 +19,27 @@
  */
 
 const AMOUNT_RE = /([\d,]+)\s*円/
+const CASE_RE = /(INV-\d{4}-\d+|PO-\d{4}-\d+)/
 
 function amountOf(rec) {
   const m = AMOUNT_RE.exec(rec['金額'] ?? '')
   return m ? Number(m[1].replace(/,/g, '')) : null
 }
 
-function variantOf(defn, rec) {
+// The case reference is embedded in a label rather than given its own column
+// - 区分 reads "請求書承認 INV-2026-7344".
+function caseRefOf(rec) {
+  for (const v of Object.values(rec)) {
+    if (typeof v !== 'string') continue
+    const m = CASE_RE.exec(v)
+    if (m) return m[1]
+  }
+  return null
+}
+
+// The value as held on the record - this is what gets validated against the
+// definition's `variants` list.
+function rawVariantOf(defn, rec) {
   if (defn.variant_field) return rec[defn.variant_field] ?? null
   // fin_purchase_order_management: the order type is not on the list screen
   // (Day 4 §6), so it can only come from a record fetch. Until that endpoint
@@ -34,14 +48,25 @@ function variantOf(defn, rec) {
   return null
 }
 
+// The phrase that goes into the comment. Some processes write something other
+// than the stored value: fin_invoice_matching holds 種別 = 定常/調整 and
+// writes 差異なし承認 / 差異あり要確認. Keeping the two separate matters -
+// validating the mapped phrase against the raw list rejected every record.
+function commentVariantOf(defn, rec) {
+  const raw = rawVariantOf(defn, rec)
+  if (raw && defn.variant_map) return defn.variant_map[raw] ?? raw
+  return raw
+}
+
 export function draftComment(defn, rec) {
   const tpl = defn.comment_template
   const amount = amountOf(rec)
   const values = {
-    variant: variantOf(defn, rec),
+    variant: commentVariantOf(defn, rec),
     amount: amount === null ? null : amount.toLocaleString('en-US'),
     date: rec['期間・詳細'] ?? rec['対象年月'] ?? null,
     item: rec['項目'] ?? null,
+    case: caseRefOf(rec),
     qty: null,
     urgency: null,
   }
@@ -55,7 +80,7 @@ export function draftComment(defn, rec) {
 }
 
 export function propose(defn, rec) {
-  const variant = variantOf(defn, rec)
+  const variant = rawVariantOf(defn, rec)
   const amount = amountOf(rec)
   const { comment, missing } = draftComment(defn, rec)
 

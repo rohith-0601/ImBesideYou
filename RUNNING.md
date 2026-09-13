@@ -21,6 +21,7 @@ Expected output:
 
 ```
 portal adapter API on http://127.0.0.1:8765
+  fin_invoice_matching: 86 pending
   fin_purchase_order_management: 81 pending
   hr_expense_settlement: 213 pending
   hr_leave_application: 40 pending
@@ -38,17 +39,23 @@ Open <http://localhost:5173>.
 
 ## What you should see
 
-Three process tabs. Pick one and the queue splits into **ready** (the tool has
+Four process tabs. Pick one and the queue splits into **ready** (the tool has
 drafted the completion comment; you approve or not) and **needs review** (the
 tool declines to draft, with its reason).
 
 - **勤怠・休暇申請** — 40 pending, all 40 ready. The cleanest case.
+- **請求書承認・経費精算** — 86 pending, 54 ready, 32 needing review. The split
+  is 種別: `定常` records get 差異なし承認 drafted, `調整` records are routed
+  to a human. 種別 predicts the outcome 64/64 in the recorded data and is set
+  before the work begins.
 - **経費精算（確認）** — 213 pending, 84 ready, 129 needing review. The 129 are
   records whose 種別 is `調整`, which the definition marks as an exception.
 - **発注管理** — 81 pending, **0 ready**. Its list view does not expose the
   order type that decides the branch, so the tool cannot classify any of them
   without a per-record fetch that does not exist yet. This is a real finding,
   not a bug: see `reports/day4_findings.md` §6.
+
+Across all four: **420 pending, 178 draftable (42%)**.
 
 Approving calls `POST /api/processes/:p/submit`, which enforces the state
 machine recovered from the logs. Try approving the same record twice — the
@@ -57,9 +64,9 @@ never been observed.
 
 ## Where the data comes from
 
-Nothing here is invented. The 420 records were parsed out of recorded screen
+Nothing here is invented. The 528 records were parsed out of recorded screen
 text in dataset B (`portal/records.json`), the screen contracts and state
-machines from 939 screen dumps (`portal/contract.json`), and the three process
+machines from 939 screen dumps (`portal/contract.json`), and the four process
 definitions are validated against both (`portal/processes/*.json`).
 
 To regenerate them:

@@ -177,9 +177,22 @@ one needs answered.
 **The result that matters:** running the assist logic over the real queues,
 `hr_leave_application` is 40/40 ready and `hr_expense_settlement` 84/213 — but
 **`fin_purchase_order_management`, the top-ranked candidate, is 0 of 81.** Its
-list view does not carry the field that decides the branch. The Day 3 scoring
-never asked whether the deciding field is on the screen the tool reads, which
-is a gap in the model rather than in that one process.
+list view does not carry the field that decides the branch.
+
+Audited that across all thirteen processes (`src/field_audit.py`): **311 of
+599 executions (52%) sit behind a per-record fetch that does not exist**, and
+three processes are fully blocked. The Day 3 model weighed volume, time,
+determinism, integration surface and branch count but never asked whether the
+deciding field is *visible* — a gap in the model, not in one process.
+
+**And a reversal.** `fin_invoice_matching`, the largest process by time,
+deferred twice, turns out to be the strongest candidate: 種別 predicts its
+outcome 64/64 **and is an input** (populated on un-worked rows, unchanged
+across 108 records seen twice), and every comment slot resolves from the list.
+The 25% browser-only share that justified deferring it measures how the
+*human* did the check — the work being removed, not a barrier to removing it.
+Added as a fourth process: 86 pending, **54 ready**. Across all four: 420
+pending, **178 draftable (42%)**.
 
 ## Day 5 — Step 3 scaffold + core build (carries Day 4's scaffold)
 
@@ -187,13 +200,15 @@ is a gap in the model rather than in that one process.
   vocabularies, real records harvested from the dumps.
 - Scaffold the web app with the portal adapter behind an interface, so the
   mock swaps for a real client without touching the tool.
-- **First: re-check every deferred candidate for the "is the deciding field
-  even on the screen?" problem.** Day 4 found the top-ranked process is 0/81
-  automatable because of it, and the Day 3 scoring model does not ask the
-  question. Any candidate promoted without that check could fail the same way.
+- **Rebuild the ranking with the two corrected components.** `data_access`
+  measured how the human worked rather than what the tool needs, and field
+  visibility was absent entirely. Both are now measurable
+  (`field_audit.py`), so the Day 3 ordering should be recomputed rather than
+  patched process by process.
 - Decide what to do about `fin_purchase_order_management`: either drop it from
-  scope, or add the per-record fetch and accept that its integration is
-  larger than the other two.
+  scope, or add the per-record fetch and accept that its integration is larger
+  than the other three. The same question applies to `fin_payment_processing`
+  and `hr_onboarding_verification`, also fully blocked.
 - Harden the flow: bulk approve, keyboard-driven review, and a visible audit
   trail of what was submitted.
 - Human-in-the-loop by default: the operator reviews and approves rather

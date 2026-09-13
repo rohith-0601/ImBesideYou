@@ -1,0 +1,52 @@
+{
+  "label": "fin_invoice_matching",
+  "display_name": "請求書承認・経費精算",
+  "system": {
+    "name": "財務会計システム",
+    "port": "5133"
+  },
+  "route": "#/payroll-items",
+  "columns": [
+    "ID",
+    "社員ID",
+    "氏名",
+    "区分",
+    "金額",
+    "種別",
+    "ステータス"
+  ],
+  "states": {
+    "pending": "未処理",
+    "done": "登録済み"
+  },
+  "transition": "未処理 -> 登録済み",
+  "transitions_observed": 46,
+  "confirmation": "登録確定しました",
+  "comment_template": "請求書照合完了。{case}　金額：{amount}円。{variant}",
+  "variant_field": "種別",
+  "variant_map": {
+    "定常": "差異なし承認。",
+    "調整": "差異あり要確認。"
+  },
+  "variants": [
+    "定常",
+    "調整"
+  ],
+  "exception_field": "種別",
+  "exception_values": [
+    "調整"
+  ],
+  "rule": {
+    "checks": [
+      "種別 決定 the 差異 outcome: 定常 -> 差異なし承認, 調整 -> 差異あり要確認"
+    ],
+    "threshold": null,
+    "note": "種別 predicts the recorded outcome 64/64 and is set before the work (populated on 未処理 rows, never changes). 調整 cases are still routed to a human — the correlation is strong but 64 observations is a modest sample and nothing in the logs says what sets 種別 upstream."
+  },
+  "evidence": {
+    "executions": 64,
+    "operators": 4,
+    "browser_only_share": 0.25,
+    "exception_rate": 0.344
+  }
+}

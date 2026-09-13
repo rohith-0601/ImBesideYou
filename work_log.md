@@ -742,6 +742,64 @@ deferred candidate before anything else gets promoted.
 `hr_expense_settlement`'s 129 reviews are different and expected — those are
 `種別: 調整` records the definition deliberately flags as exceptions.
 
+### Third pass: auditing the gap the prototype exposed
+
+The 0/81 result was too important to leave as a note for tomorrow, so I ran
+the check across all thirteen processes (`src/field_audit.py`).
+
+**311 of 599 executions (52%) sit behind a per-record fetch that does not
+exist.** Six processes are draftable from the list alone (288 executions),
+four partially, and three are fully blocked:
+`fin_purchase_order_management`, `fin_payment_processing`,
+`hr_onboarding_verification`.
+
+My first version of the audit was wrong and gave two answers I didn't believe,
+which is why I looked. It compared each process's *variant* values against the
+list columns — but for `fin_invoice_matching` the variant is the **outcome**
+(差異なし承認 / 差異あり要確認), not an input, so comparing it to columns
+reported `detail_only` when the real predictor (種別) is right there on the
+list. And `inv_stock_adjustment` matched 0.55 against 氏名 purely because my
+Day 3 variant regex falls back to a product name for portal records and a 区分
+code for Notepad ones. Rewrote it to check **per comment slot**, which is the
+same condition `assist.js` applies when deciding whether to draft — so the
+audit and the tool can't disagree.
+
+### The reversal
+
+That fix flipped `fin_invoice_matching` to `list_sufficient`, which mattered
+enough to test properly. It is the largest process by time in the dataset and
+I had deferred it **twice** — Day 3 as irreducible judgement, Day 4 as
+desktop-heavy. Both reasons are wrong:
+
+1. 種別 predicts the outcome **64/64**.
+2. 種別 is an **input**, not an output — populated on 未処理 rows (147 定常 /
+   91 調整 while still un-worked), and across **108 records seen more than
+   once, not one changed**. So the branch is decided before anyone touches the
+   record and automating against it isn't circular. I checked this because a
+   field that perfectly predicts an outcome is worthless if the work sets it;
+   `field_is_an_input()` encodes the test and I ran it on all three 種別
+   screens.
+3. Every comment slot resolves from the list row.
+
+The 25% browser-only share I used to justify deferring it measures how the
+*human* did the check — the Excel and Word detour. If the outcome is already
+on the record, that detour is the work being removed, not a barrier to
+removing it. **`data_access` was measuring the wrong thing**, which is the
+second flaw found in the Day 3 scoring model today.
+
+So I added it as a fourth process definition. In the running prototype: 86
+pending, **54 ready**, 32 routed to a human, and the drafted comment matches
+the recorded originals character for character —
+`請求書照合完了。INV-2026-7347　金額：1,832,962円。差異なし承認。`
+
+Across all four processes: **420 pending, 178 draftable (42%)**.
+
+One more bug worth recording: adding it, every one of the 86 records came back
+flagged. `variant_map` turns 種別 = 定常 into the comment phrase 差異なし承認,
+and I was validating that *mapped phrase* against the definition's raw variant
+list `[定常, 調整]`, so every record failed as "unknown variant". Split into
+`rawVariantOf` (validate) and `commentVariantOf` (render).
+
 ### What I deliberately did not build
 
 **Auto-approval.** Every proposal carries `needs_review` and nothing submits
@@ -783,7 +841,8 @@ translated with the model's help.
 | `portal/contract.json` | 13 screen contracts: columns, states, transitions, confirmations |
 | `portal/processes/*.json` | 3 validated definitions for the chosen scope |
 | `reports/day4_findings.md` | the bug, the correction, the contract, the schedule risk |
-| `src/harvest_records.py` | pulls 420 real records out of the screen dumps |
+| `src/harvest_records.py` | pulls 528 real records out of the screen dumps |
+| `src/field_audit.py` | is the deciding field on the screen the tool reads? |
 | `portal/records.json` | the harvested records the mock serves |
 | `server/` | Express API: portal adapter, assist logic, routes |
 | `web/` | React front end (Vite) |

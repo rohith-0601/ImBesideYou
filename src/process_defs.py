@@ -85,6 +85,49 @@ DEFINITIONS = {
         "evidence": {"executions": 90, "operators": 3,
                      "browser_only_share": 0.567, "exception_rate": 0.0},
     },
+    # Added on Day 4 after the field audit. This process was deferred twice —
+    # on Day 3 as "irreducible judgement", on Day 4 as "desktop-heavy" — and
+    # both reasons turned out to be wrong:
+    #
+    #   * 種別 (定常/調整) predicts the 差異 outcome 64/64, and it is an
+    #     *input*: populated on 未処理 rows and unchanged across 108 records
+    #     observed more than once. So the branch is decided before the work.
+    #   * every slot its comment needs resolves from the list row.
+    #
+    # Its low browser-only share (25%) measures how the *human* did the check
+    # — the Excel and Word detour — which is the work the tool removes, not a
+    # barrier to removing it. It is the largest process by time in the whole
+    # dataset.
+    "fin_invoice_matching": {
+        "label": "fin_invoice_matching",
+        "display_name": "請求書承認・経費精算",
+        "system": {"name": "財務会計システム", "port": "5133"},
+        "route": "#/payroll-items",
+        "columns": ["ID", "社員ID", "氏名", "区分", "金額", "種別", "ステータス"],
+        "states": {"pending": "未処理", "done": "登録済み"},
+        "transition": "未処理 -> 登録済み",
+        "transitions_observed": 46,
+        "confirmation": "登録確定しました",
+        "comment_template": "請求書照合完了。{case}　金額：{amount}円。{variant}",
+        "variant_field": "種別",
+        "variant_map": {"定常": "差異なし承認。", "調整": "差異あり要確認。"},
+        "variants": ["定常", "調整"],
+        "exception_field": "種別",
+        "exception_values": ["調整"],
+        "rule": {
+            "checks": ["種別 決定 the 差異 outcome: 定常 -> 差異なし承認, "
+                       "調整 -> 差異あり要確認"],
+            "threshold": None,
+            "note": ("種別 predicts the recorded outcome 64/64 and is set "
+                     "before the work (populated on 未処理 rows, never "
+                     "changes). 調整 cases are still routed to a human — the "
+                     "correlation is strong but 64 observations is a modest "
+                     "sample and nothing in the logs says what sets 種別 "
+                     "upstream."),
+        },
+        "evidence": {"executions": 64, "operators": 4,
+                     "browser_only_share": 0.250, "exception_rate": 0.344},
+    },
     "fin_purchase_order_management": {
         "label": "fin_purchase_order_management",
         "display_name": "発注管理",
