@@ -247,7 +247,66 @@ new definition while I was writing it — an exception field with no source, and
 `urgency`, which is parsed out of the composite `reason` string rather than
 returned on its own.
 
-## 7. Carried into Day 6
+## 7. The fetch path, implemented
+
+Specifying a contract and asserting it would work are not the same thing, so
+the path is now built end to end and the claim is demonstrated on a real
+record.
+
+- `portal/details.json` serves the **4 detail panes** that were captured, keyed
+  by process and record ID. Nothing synthesised.
+- `MockPortalClient.getRecord()` returns the list row plus `_detail` where a
+  pane exists. Its absence means *the fetch has not been made*, not *this
+  record has no detail* — every record has a detail pane in the real portal;
+  we simply did not record most of them.
+- `assist.js` reads the declared `detail_source`, substitutes `reason` into the
+  template, and parses the urgency token out of the composite string to route
+  exceptions.
+
+Running against the real queue:
+
+```
+fin_purchase_order_management   pending=82  ready=1   <- drafted from a detail fetch
+
+drafted: P10-07054374-004
+  発注管理処理。定期発注：電子基板ユニット　数量 176　合計 842,336円　通常。発注書確認・登録完了。
+
+blocked: P10-07010448-005
+  詳細取得が未実装のため起案できません
+  (record fetch specified [reason] but not implemented — no detail captured)
+```
+
+**The process that was 0 of 81 now drafts every record the fetch data exists
+for, and the other 81 say precisely what is missing** — naming the field
+(`reason`) so an operator can see this is an unbuilt integration rather than an
+undecidable case.
+
+### A harvesting bug this exposed
+
+The one purchase-order record with a detail pane was not in the pending queue
+at all. Its earliest *list* capture already showed 完了, while the detail pane
+had caught it at 未確認 several minutes earlier — so taking the starting status
+from list views alone dropped the only record that could demonstrate any of
+this. `harvest_records.py` now treats detail panes as status observations too,
+which moved 2 records.
+
+## 8. Tests
+
+`server/assist.test.js` — 12 tests, `npm test` in `server/`.
+
+The replay in §5 is the stronger evidence, but it can only exercise branches
+that actually occurred during the recording, and some did not:
+
+- **要注意 urgency** appears in 7 completion comments and in **no** captured
+  detail pane, so the routing it triggers is unverifiable from data alone;
+- **the refusal paths** — empty comment, unknown variant, unfetched detail —
+  are by definition things operators never did.
+
+Fixtures are shaped exactly like real records, with field names and values
+copied from `portal/records.json` and `portal/detail_contract.json` rather than
+invented, so a passing test means the same thing it would against the portal.
+
+## 9. Carried into Day 6
 
 - Measure coverage honestly: of the 484 pending records, what share does the
   tool actually complete end to end, and how much operator time does the

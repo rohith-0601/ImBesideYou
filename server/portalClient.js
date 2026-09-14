@@ -46,6 +46,13 @@ export class MockPortalClient {
     this.records = JSON.parse(
       readFileSync(join(PORTAL_DIR, 'records.json'), 'utf8'),
     )
+    // Record detail panes recovered from the screen dumps. Only 5 were
+    // captured, so this is deliberately sparse: getRecord returns detail for
+    // the records we actually observed and nothing for the rest, which is an
+    // honest model of a fetch we have specified but never made.
+    this.details = JSON.parse(
+      readFileSync(join(PORTAL_DIR, 'details.json'), 'utf8'),
+    )
     // In-memory only, so a restart brings the same queue back pending and a
     // run is reproducible.
     this.submitted = new Map()
@@ -64,15 +71,42 @@ export class MockPortalClient {
   listRecords(process, pendingOnly = true) {
     const defn = this._defn(process)
     const pending = defn.states.pending
+    const details = this.details[process] ?? {}
     return (this.records[process] ?? [])
-      .map((rec) => ({ ...rec, 'ステータス': this._statusOf(rec) }))
+      .map((rec) => ({
+        ...rec,
+        'ステータス': this._statusOf(rec),
+        // Attached here so the queue can show which records the tool could
+        // draft if the fetch existed, rather than one lookup per row.
+        _detail: details[rec.ID] ?? null,
+        _detail_available: Boolean(details[rec.ID]),
+      }))
       .filter((rec) => !pendingOnly || rec['ステータス'] === pending)
   }
 
+  /**
+   * The list row, plus the detail pane if one was captured for this record.
+   *
+   * `_detail` is present only where a real pane was observed. A caller must
+   * treat its absence as "the fetch has not been made", not as "the record
+   * has no detail" - every record has a detail pane in the real portal; we
+   * simply did not record most of them.
+   */
   getRecord(process, recordId) {
     const rec = (this.records[process] ?? []).find((r) => r.ID === recordId)
     if (!rec) throw new PortalError(`${recordId} not found in ${process}`)
-    return { ...rec, 'ステータス': this._statusOf(rec) }
+    const detail = this.details[process]?.[recordId] ?? null
+    return {
+      ...rec,
+      'ステータス': this._statusOf(rec),
+      _detail: detail,
+      _detail_available: Boolean(detail),
+    }
+  }
+
+  /** Does a captured detail pane exist for this record? */
+  hasDetail(process, recordId) {
+    return Boolean(this.details[process]?.[recordId])
   }
 
   submit(process, recordId, comment) {

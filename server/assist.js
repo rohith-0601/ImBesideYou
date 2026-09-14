@@ -20,6 +20,10 @@
 
 const AMOUNT_RE = /([\d,]+)\s*円/
 const CASE_RE = /(INV-\d{4}-\d+|PO-\d{4}-\d+)/
+// Urgency is the last token of the composite `reason` field returned by a
+// record-detail fetch: "定期発注：電子基板ユニット 数量 176 合計 842,336円 通常".
+// It is what routes the case, so it is parsed out rather than left inside.
+const URGENCY_RE = /[\s\u3000](通常|緊急|要注意)\s*$/
 
 function amountOf(rec) {
   const m = AMOUNT_RE.exec(rec['金額'] ?? '')
@@ -58,9 +62,32 @@ function commentVariantOf(defn, rec) {
   return raw
 }
 
+// Values that only a per-record fetch can supply. Absent unless the fetch was
+// actually made - `_detail` is attached by MockPortalClient only for the
+// records whose detail pane was captured.
+function detailValues(defn, rec) {
+  const src = defn.detail_source
+  if (!src || !rec._detail) return {}
+  const out = {}
+  for (const field of src.fills ?? []) {
+    if (rec._detail[field] != null) out[field] = rec._detail[field]
+  }
+  // The named field is the one the template substitutes.
+  if (src.field && rec._detail[src.field] != null) {
+    out[src.field] = rec._detail[src.field]
+  }
+  // urgency is embedded in the composite reason string, not returned alone.
+  if ((src.fills ?? []).includes('urgency') && out.reason) {
+    const m = URGENCY_RE.exec(out.reason)
+    if (m) out.urgency = m[1]
+  }
+  return out
+}
+
 export function draftComment(defn, rec) {
   const tpl = defn.comment_template
   const amount = amountOf(rec)
+  const fromDetail = detailValues(defn, rec)
   const values = {
     variant: commentVariantOf(defn, rec),
     amount: amount === null ? null : amount.toLocaleString('en-US'),
@@ -69,6 +96,7 @@ export function draftComment(defn, rec) {
     case: caseRefOf(rec),
     qty: null,
     urgency: null,
+    ...fromDetail,
   }
   const slots = [...tpl.matchAll(/\{(\w+)\}/g)].map((m) => m[1])
   const missing = slots.filter((s) => !values[s])
@@ -93,22 +121,38 @@ export function propose(defn, rec) {
   let needsReview = false
 
   if (variant === null && defn.variant_source === 'record_detail') {
-    needsReview = true
-    blockers.push(
-      'この画面の一覧に区分が表示されないため、レコードを開くまで分類できません ' +
-        '(list view does not expose the variant - record fetch required)',
-    )
+    // Two different situations, and conflating them would misrepresent the
+    // work left to do: either the fetch has a specified contract and simply
+    // was not made for this record, or no contract is known at all.
+    if (!defn.detail_source) {
+      needsReview = true
+      blockers.push(
+        'この処理には詳細取得が必要ですが、取得仕様が未確定です ' +
+          '(needs a per-record fetch; no contract established)',
+      )
+    } else if (!rec._detail) {
+      needsReview = true
+      blockers.push(
+        `詳細取得が未実装のため起案できません (record fetch specified ` +
+          `[${defn.detail_source.field}] but not implemented — ` +
+          `no detail captured for this record)`,
+      )
+    }
   } else if (variant && !defn.variants.includes(variant)) {
     needsReview = true
     blockers.push(`未知の区分 '${variant}' (variant not in the definition)`)
   }
 
+  // The exception field may live on the list row or come back from the fetch.
   const excField = defn.exception_field
-  if (excField && (defn.exception_values ?? []).includes(rec[excField])) {
-    needsReview = true
-    blockers.push(
-      `${excField}='${rec[excField]}' は要確認 (flagged exception - handled manually)`,
-    )
+  if (excField) {
+    const excValue = rec[excField] ?? detailValues(defn, rec)[excField]
+    if ((defn.exception_values ?? []).includes(excValue)) {
+      needsReview = true
+      blockers.push(
+        `${excField}='${excValue}' は要確認 (flagged exception - handled manually)`,
+      )
+    }
   }
 
   if (defn.rule?.threshold == null && amount !== null) {
@@ -132,9 +176,16 @@ export function propose(defn, rec) {
     )
   }
 
+  if (rec._detail) {
+    notes.push(
+      '詳細取得の結果から起案しました (drafted from a record-detail fetch)',
+    )
+  }
+
   return {
     record: rec, variant, amount, comment,
     needs_review: needsReview,
+    from_detail: Boolean(rec._detail),
     blockers, notes,
     reasons: [...blockers, ...notes],   // kept for compatibility
   }

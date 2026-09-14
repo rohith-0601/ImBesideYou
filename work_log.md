@@ -1045,6 +1045,45 @@ syntax error. Restored from git and replaced it by line range instead. Not
 interesting except as a reminder that structured edits to structured files
 should not be done with pattern matching.
 
+### Implementing the fetch, and what it exposed
+
+Specifying a contract is not the same as showing it works, so I built the path
+end to end: `portal/details.json` serves the 4 captured panes,
+`MockPortalClient.getRecord()` attaches `_detail` where one exists, and
+`assist.js` reads the declared `detail_source`, substitutes `reason`, and
+parses the urgency token out of the composite string for routing.
+
+**The process that was 0 of 81 now drafts the record the fetch data exists
+for**, producing exactly the template sentence, and the other 81 name the
+missing field (`reason`) rather than saying something vague. That distinction
+matters for the report: it is an unbuilt integration, not an undecidable case.
+
+**A harvesting bug nearly hid the whole thing.** The one purchase-order record
+with a detail pane was not in the pending queue at all — its earliest *list*
+capture already showed 完了, while the detail pane had caught it at 未確認
+minutes earlier. Taking the starting status from list views alone dropped the
+only record that could demonstrate any of this. `harvest_records.py` now treats
+detail panes as status observations too. I found it only because I expected
+`ready=1` and got `ready=0`, which is a good argument for predicting the number
+before running the command.
+
+### Tests, and why now
+
+`server/assist.test.js`, 12 tests, `npm test`.
+
+The replay is stronger evidence than any unit test — 601 real executions — but
+it can only exercise branches that actually happened, and two kinds did not.
+**要注意 urgency** appears in 7 completion comments and in no captured detail
+pane, so the routing it triggers cannot be verified from data at all. And the
+refusal paths — empty comment, unknown variant, unfetched detail — are by
+definition things operators never did.
+
+Fixtures are copied from `portal/records.json` and `portal/detail_contract.json`
+rather than invented, so a passing test means the same thing it would against
+the portal. They also pin the three regressions I introduced this week: the
+`variant_map` phrase-vs-value confusion, the blockers/notes split, and the
+detail-vs-no-detail refusal.
+
 ### README restructured
 
 `README.md` was still the client's brief. Moved it to `TASK.md` and wrote the
@@ -1086,6 +1125,8 @@ inspecting them.
 | `src/replay.py` | replays the tool against the real executions — 99.5% |
 | `src/detail_panes.py` | recovers record detail panes; specifies the fetch contract |
 | `portal/detail_contract.json` | what a per-record fetch must return, per process |
+| `portal/details.json` | the 4 captured panes, served by the mock |
+| `server/assist.test.js` | 12 tests covering branches the replay cannot reach |
 | `README.md` | submission front door, written as the flow |
 | `TASK.md` | the client's brief, moved off README |
 | `reports/day5_findings.md` | ranking, scope, the tool, and the replay |
