@@ -847,3 +847,142 @@ translated with the model's help.
 | `server/` | Express API: portal adapter, assist logic, routes |
 | `web/` | React front end (Vite) |
 | `RUNNING.md` | how to run both halves, and what to expect |
+
+---
+
+## Day 5
+
+**Goal:** rebuild the ranking with the two components Day 4 proved were wrong,
+settle the scope that follows from it, and build the operator tool properly.
+
+### What I did
+
+1. **Rebuilt the score** (`src/rescore.py`), replacing `data_access` with
+   `draftable` from `field_audit.py`.
+2. **Revised scope** on the corrected ordering — added
+   `inv_contract_management`, kept `fin_purchase_order_management` for a
+   reason.
+3. **Rebuilt the front end** as a three-pane operator tool with a real design
+   system, keyboard navigation, bulk approve and an audit trail.
+4. **Looked at it.** Screenshotted the running app in both colour schemes and
+   fixed what was actually wrong rather than assuming it was fine.
+
+### What I found
+
+**The ranking moved a long way, because the fault was structural.**
+
+| process | was | now |
+|---|---|---|
+| `fin_invoice_matching` | #5 | **#1** (0.721) |
+| `inv_contract_management` | #8 | #3 |
+| `fin_purchase_order_management` | **#1** | **#11** |
+| `fin_payment_processing` | #7 | #13 |
+
+The three at the bottom are the three that cannot be drafted at all.
+`fin_invoice_matching` is now clear of second place by a wide margin — it is
+the largest process by time *and* fully list-resolvable, which is the
+combination I spent two days failing to see.
+
+**No process in dataset B has judgement exceptions left.** Once Day 4
+reclassified `fin_invoice_matching`'s 差異 branch as predictable, every branch
+observed across 15 sessions is decided by a field that exists on the record
+before the work starts. That is a much stronger automatability claim than Day
+3 made, and it rests entirely on the input-vs-output test — which is why I
+wrote that test rather than eyeballing the correlation.
+
+### Scope
+
+Five configured: `hr_expense_settlement` (84/213 drafted),
+`fin_invoice_matching` (54/86), `inv_contract_management` (64/64),
+`hr_leave_application` (40/40), `fin_purchase_order_management` (0/81).
+**484 pending, 242 drafted (50%).**
+
+Added `inv_contract_management` on the corrected ranking. **Kept
+`fin_purchase_order_management` despite #11** — it costs one config entry and
+it is the honest demonstration that the tool fails visibly. The plan asked for
+unhandled cases to fail loudly rather than silently, and a process that cannot
+be automated at all is the sharpest test of that. Deleting it would have made
+the demo look better and the submission worse.
+
+### On the UI
+
+Rohith asked for premium rather than vibe-coded, so I built it as an operator
+tool — someone works several hundred of these in a sitting — not a dashboard.
+Reference points are Linear and Superhuman: density, keyboard reach, one
+accent colour, motion only where it confirms a state change.
+
+Concretely: a design-token system with a warm neutral scale (long sessions are
+easier than on pure grey), tabular numerals for amounts and IDs, a Japanese
+font stack with looser leading for JP text, light and dark, reduced-motion
+honoured, focus-visible rings, live regions on the audit trail and toasts.
+`J`/`K`/`↵`/`E` run the whole review loop without the mouse.
+
+### What looking at it caught
+
+I screenshotted the running app rather than trusting the build, and found
+three things I would otherwise have shipped:
+
+- **The record rows were broken.** Subject and detail ran together on one line
+  — "福岡システム設計請求書承認 INV-2026-7347 · 定常" — because I styled a
+  `<span>` with `margin-top` and spans are inline. Two seconds to fix, would
+  have been embarrassing to leave.
+- **A heading was lying.** Drafted records showed "Why this needs you" above
+  the note "no policy threshold configured". That note is context, not a
+  blocker, and the heading told the operator a ready record needed attention.
+  Split `blockers` from `notes` server-side and gave them separate headings
+  and styling.
+- **The sidebar bars showed wrong data.** The ready/review split rendered only
+  for the open queue, because `ready` was set on a process only after fetching
+  its queue. Moved the computation to `/api/processes` so every bar is right
+  on first paint.
+
+None of these would have been caught by the build passing, which it did
+throughout.
+
+### Bulk approve, and why it stops early
+
+With 84 drafted expense records, one-at-a-time is 84 keystrokes, so bulk is
+the actual productivity feature rather than a nicety. Three decisions in it:
+
+- **Behind a confirmation** showing the count and a sample of the sentence
+  that will be written on every record. Approving 84 payroll records in one
+  action is exactly the operation that is expensive to get wrong.
+- **Each record still submitted individually.** The portal has no batch
+  endpoint; inventing one would hide that a real integration makes N calls and
+  can fail partway.
+- **Stops at the first failure.** A partial batch with a gap in the middle is
+  much harder for an operator to reconcile than one that stopped at a known
+  point — and the portal's behaviour on a failed submit is unobserved, so
+  pressing on would be guessing. Verified with a deliberately bad record
+  mid-batch: two submitted, stopped, counts correct.
+
+### Decisions taken
+
+- **`draftable` replaces `data_access`** as the integration-cost component,
+  because it measures what the tool needs rather than how the human coped.
+- **Still no auto-approval.** The submit transport is unverified and the
+  drafted comment asserts 規程内であることを確認した against a policy the tool
+  does not have. A human confirms that sentence.
+- **The document-check caveat is surfaced per record**, not buried in the
+  report — `inv_contract_management`'s comment claims a document was checked
+  and the tool cannot check it.
+
+### Generative AI usage
+
+Claude Code (Opus 5) throughout: the rescore module, the design system and the
+React components. The three UI bugs above were found by rendering the app and
+reading the screenshot, not by review — the same pattern as every other day
+this week, where the failures surfaced by running things rather than by
+inspecting them.
+
+### Artifacts
+
+| file | what it is |
+|---|---|
+| `src/rescore.py` | corrected ranking, with the delta against Day 3 |
+| `server/index.js` | adds the batch endpoint and per-process ready counts |
+| `server/assist.js` | blockers/notes split, document-check note |
+| `web/src/styles.css` | the design system |
+| `web/src/{App,Sidebar,QueueList,RecordDetail,BulkBar,Toasts}.jsx` | the tool |
+| `portal/processes/inv_contract_management.json` | fourth configured process |
+| `reports/day5_findings.md` | ranking, scope, and the tool |

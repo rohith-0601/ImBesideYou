@@ -25,6 +25,7 @@ portal adapter API on http://127.0.0.1:8765
   fin_purchase_order_management: 81 pending
   hr_expense_settlement: 213 pending
   hr_leave_application: 40 pending
+  inv_contract_management: 64 pending
 ```
 
 ## 2. Start the front end
@@ -39,9 +40,12 @@ Open <http://localhost:5173>.
 
 ## What you should see
 
-Four process tabs. Pick one and the queue splits into **ready** (the tool has
-drafted the completion comment; you approve or not) and **needs review** (the
-tool declines to draft, with its reason).
+Five queues in the sidebar, ordered by how much work the tool has actually
+drafted. Each splits into **drafted** (comment written, awaiting your
+approval) and **needs a person** (the tool declines, with its reason).
+
+**Keyboard:** `J`/`K` move · `↵` approve and advance · `E` edit the comment.
+The review loop runs without the mouse.
 
 - **勤怠・休暇申請** — 40 pending, all 40 ready. The cleanest case.
 - **請求書承認・経費精算** — 86 pending, 54 ready, 32 needing review. The split
@@ -50,12 +54,20 @@ tool declines to draft, with its reason).
   before the work begins.
 - **経費精算（確認）** — 213 pending, 84 ready, 129 needing review. The 129 are
   records whose 種別 is `調整`, which the definition marks as an exception.
-- **発注管理** — 81 pending, **0 ready**. Its list view does not expose the
+- **契約管理** — 64 pending, all 64 drafted. Every record carries a note: the
+  comment asserts 関連書類確認済み and the portal names a `.docx` you are
+  expected to open. The tool drafts the sentence; you confirm the document.
+- **発注管理** — 81 pending, **0 drafted**. Its list view does not expose the
   order type that decides the branch, so the tool cannot classify any of them
   without a per-record fetch that does not exist yet. This is a real finding,
-  not a bug: see `reports/day4_findings.md` §6.
+  not a bug: see `reports/day4_findings.md` §6 and `day5_findings.md` §2.
 
-Across all four: **420 pending, 178 draftable (42%)**.
+Across all five: **484 pending, 242 drafted (50%)**.
+
+**Bulk approve** appears above the queue when anything is drafted. It shows
+the count and a sample of the sentence before committing, submits each record
+individually, and stops at the first failure rather than leaving a gap in the
+middle of a batch.
 
 Approving calls `POST /api/processes/:p/submit`, which enforces the state
 machine recovered from the logs. Try approving the same record twice — the

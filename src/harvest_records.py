@@ -32,6 +32,7 @@ SCREEN_TO_PROCESS = {
     "経費精算・給与変更": "hr_expense_settlement",
     "発注管理": "fin_purchase_order_management",
     "請求書承認・経費精算": "fin_invoice_matching",
+    "契約管理": "inv_contract_management",
 }
 
 

@@ -29,17 +29,26 @@ app.get('/api/health', (_req, res) => {
 
 app.get('/api/processes', (_req, res) => {
   res.json(
-    Object.values(client.defs).map((d) => ({
-      label: d.label,
-      display_name: d.display_name,
-      system: d.system,
-      states: d.states,
-      variants: d.variants,
-      confirmation: d.confirmation,
-      counts: client.counts(d.label),
-      evidence: d.evidence,
-      rule: d.rule,
-    })),
+    Object.values(client.defs).map((d) => {
+      // The drafted/needs-a-person split is computed here rather than left to
+      // the client. The sidebar shows it for every queue, and deriving it
+      // only for the open one made the other bars show stale or missing data.
+      const q = buildQueue(client, d.label)
+      return {
+        label: d.label,
+        display_name: d.display_name,
+        system: d.system,
+        states: d.states,
+        variants: d.variants,
+        confirmation: d.confirmation,
+        counts: client.counts(d.label),
+        pending: q.total_pending,
+        ready: q.ready,
+        needs_review: q.needs_review,
+        evidence: d.evidence,
+        rule: d.rule,
+      }
+    }),
   )
 })
 
@@ -64,6 +73,47 @@ app.post('/api/processes/:process/submit', (req, res) => {
   } catch (e) {
     res.status(e instanceof PortalError ? 409 : 500).json({ error: e.message })
   }
+})
+
+/**
+ * Bulk submit. Each record is still submitted individually - there is no
+ * batch endpoint on the portal and inventing one would hide the fact that a
+ * real integration has to make N calls and can fail partway.
+ *
+ * Processing stops at the first failure rather than pressing on. A partial
+ * batch with a gap in the middle is far harder for an operator to reconcile
+ * than one that stopped at a known point, and the portal's behaviour on a
+ * failed submit is unobserved (Day 4 §5), so continuing would be guessing.
+ */
+app.post('/api/processes/:process/submit-batch', (req, res) => {
+  const { records } = req.body ?? {}
+  if (!Array.isArray(records) || records.length === 0) {
+    return res.status(400).json({ error: 'records[] is required' })
+  }
+  if (records.length > 200) {
+    return res.status(400).json({ error: 'batch limited to 200 records' })
+  }
+
+  const submitted = []
+  let failure = null
+
+  for (const { record_id, comment } of records) {
+    try {
+      const confirmation = client.submit(req.params.process, record_id, comment)
+      submitted.push({ record_id, confirmation })
+    } catch (e) {
+      failure = { record_id, error: e.message }
+      break
+    }
+  }
+
+  res.json({
+    submitted,
+    failure,
+    stopped_early: Boolean(failure),
+    remaining: records.length - submitted.length - (failure ? 1 : 0),
+    counts: client.counts(req.params.process),
+  })
 })
 
 app.listen(PORT, '127.0.0.1', () => {

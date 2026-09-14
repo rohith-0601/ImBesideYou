@@ -84,30 +84,35 @@ export function propose(defn, rec) {
   const amount = amountOf(rec)
   const { comment, missing } = draftComment(defn, rec)
 
-  const reasons = []
+  // Kept separate: a `blocker` is why a person must handle the case, a `note`
+  // is context the operator should see but which does not stop the draft.
+  // Mixing them put "no policy threshold configured" under a heading that
+  // said the record needed attention, on records that were perfectly ready.
+  const blockers = []
+  const notes = []
   let needsReview = false
 
   if (variant === null && defn.variant_source === 'record_detail') {
     needsReview = true
-    reasons.push(
+    blockers.push(
       'この画面の一覧に区分が表示されないため、レコードを開くまで分類できません ' +
         '(list view does not expose the variant - record fetch required)',
     )
   } else if (variant && !defn.variants.includes(variant)) {
     needsReview = true
-    reasons.push(`未知の区分 '${variant}' (variant not in the definition)`)
+    blockers.push(`未知の区分 '${variant}' (variant not in the definition)`)
   }
 
   const excField = defn.exception_field
   if (excField && (defn.exception_values ?? []).includes(rec[excField])) {
     needsReview = true
-    reasons.push(
+    blockers.push(
       `${excField}='${rec[excField]}' は要確認 (flagged exception - handled manually)`,
     )
   }
 
   if (defn.rule?.threshold == null && amount !== null) {
-    reasons.push(
+    notes.push(
       '規程上限が未設定のため金額判定は行っていません ' +
         '(no policy threshold configured - amount not checked)',
     )
@@ -115,10 +120,24 @@ export function propose(defn, rec) {
 
   if (missing.length) {
     needsReview = true
-    reasons.push(`コメント未生成: ${missing.join(', ')} (unresolved slots)`)
+    blockers.push(`コメント未生成: ${missing.join(', ')} (unresolved slots)`)
   }
 
-  return { record: rec, variant, amount, comment, needs_review: needsReview, reasons }
+  // A process whose comment asserts a document was checked cannot have that
+  // checked by the tool - the portal names the file but never its contents.
+  if (defn.requires_document_check) {
+    notes.push(
+      '関連書類の確認は自動化できません。承認前に書類をご確認ください ' +
+        '(the referenced document must be opened by a person)',
+    )
+  }
+
+  return {
+    record: rec, variant, amount, comment,
+    needs_review: needsReview,
+    blockers, notes,
+    reasons: [...blockers, ...notes],   // kept for compatibility
+  }
 }
 
 export function buildQueue(client, process) {

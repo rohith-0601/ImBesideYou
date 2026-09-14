@@ -128,6 +128,46 @@ DEFINITIONS = {
         "evidence": {"executions": 64, "operators": 4,
                      "browser_only_share": 0.250, "exception_rate": 0.344},
     },
+    # Added on Day 5 when the corrected ranking moved it from #8 to #3. All
+    # of its comment slots resolve from the list screen (申請種別, 期間・詳細),
+    # and it is the second-largest process by time in the dataset.
+    #
+    # Caveat carried into the UI: the comment ends 関連書類確認済み ("related
+    # documents confirmed"), and the portal names a .docx the operator is
+    # expected to open — Day 3 measured 1,087 Word events on this process.
+    # The tool can draft the sentence; it cannot confirm the document. That
+    # confirmation is exactly what the human step is for.
+    "inv_contract_management": {
+        "label": "inv_contract_management",
+        "display_name": "契約管理",
+        "system": {"name": "受発注在庫管理システム", "port": "5134"},
+        "route": "#/leave-applications",
+        "columns": ["ID", "社員ID", "氏名", "申請種別", "期間・詳細", "部署",
+                    "ステータス"],
+        "states": {"pending": "処理待ち", "done": "承認"},
+        "transition": "処理待ち -> 承認",
+        "transitions_observed": 28,
+        "confirmation": "処理完了しました",
+        "comment_template": "契約管理処理。種別：{variant}。期日：{date}。関連書類確認済み。",
+        "variant_field": "申請種別",
+        "variants": ["取引基本契約 (新規締結)", "秘密保持契約 (新規締結)",
+                     "保守委託契約 (更新)", "売買契約 (変更)",
+                     "業務委託契約 (解除)"],
+        "exception_field": None,
+        "exception_values": [],
+        "requires_document_check": True,
+        "rule": {
+            "checks": ["関連書類 (the named .docx) must be opened and checked "
+                       "by a person before approval"],
+            "threshold": None,
+            "note": ("No exception variant was observed across 47 executions. "
+                     "The document check is not automatable from the logs — "
+                     "the portal names the file but its contents were never "
+                     "captured."),
+        },
+        "evidence": {"executions": 47, "operators": 4,
+                     "browser_only_share": 0.170, "exception_rate": 0.0},
+    },
     "fin_purchase_order_management": {
         "label": "fin_purchase_order_management",
         "display_name": "発注管理",

@@ -194,7 +194,7 @@ The 25% browser-only share that justified deferring it measures how the
 Added as a fourth process: 86 pending, **54 ready**. Across all four: 420
 pending, **178 draftable (42%)**.
 
-## Day 5 — Step 3 scaffold + core build (carries Day 4's scaffold)
+## Day 5 — Corrected ranking, revised scope, operator tool ✅
 
 - Generate the mock portal from `contract.json` — real columns, real status
   vocabularies, real records harvested from the dumps.
@@ -216,6 +216,25 @@ pending, **178 draftable (42%)**.
   where a silent wrong write is expensive.
 - Handle the branch cases found on Day 3; make unhandled cases fail visibly
   and fall back to the manual path.
+
+**Outcome:** `data_access` replaced by `draftable` (what the tool needs, not
+how the human coped). The ranking moved structurally —
+`fin_invoice_matching` #5 → **#1**, `fin_purchase_order_management` #1 → #11,
+and the three processes that cannot be drafted at all now sit last. After Day
+4's correction, **no process in dataset B has judgement exceptions left**:
+every observed branch is decided by a field present before the work starts.
+
+Scope is now five processes, **484 pending / 242 drafted (50%)**. Added
+`inv_contract_management` (#3). Kept `fin_purchase_order_management` at #11
+deliberately — 81 records, none drafted, each saying why, which is the
+clearest demonstration that unhandled cases fail visibly.
+
+Front end rebuilt as a three-pane keyboard-driven operator tool: design-token
+system, light/dark, bulk approve behind a confirmation that stops at the first
+failure, session audit trail. Screenshotting it caught three real bugs the
+build did not — inline row layout, a heading that told operators ready records
+needed attention, and sidebar counts that only rendered for the open queue.
+See [`reports/day5_findings.md`](reports/day5_findings.md).
 
 ## Day 6 — Harden, test, and the honest analysis
 
