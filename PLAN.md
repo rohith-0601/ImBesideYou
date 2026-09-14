@@ -234,6 +234,15 @@ system, light/dark, bulk approve behind a confirmation that stops at the first
 failure, session audit trail. Screenshotting it caught three real bugs the
 build did not — inline row layout, a heading that told operators ready records
 needed attention, and sidebar counts that only rendered for the open queue.
+Then replayed the tool against the work that actually happened
+(`src/replay.py`): each recovered execution ends with the comment its operator
+wrote, so the drafted comment can be compared directly. **204 of 205 match —
+99.5%**, the only measured accuracy figure in the project. Its first run
+reported 0.0%, because operators sometimes wrap the same sentence in a Notepad
+memo header.
+
+`README.md` rewritten as the submission front door, structured as the flow of
+the work; the client brief moved to `TASK.md`.
 See [`reports/day5_findings.md`](reports/day5_findings.md).
 
 ## Day 6 — Harden, test, and the honest analysis

@@ -112,7 +112,66 @@ from the data, not caution for its own sake:
   policy to confirm against. A tool that auto-approved against an inferred
   limit would be inventing the rule it claims to enforce.
 
-## 5. Carried into Day 6
+## 5. Replay: the first verifiable accuracy number
+
+Every evaluation up to here has been structural — does the segmentation tile
+the session, does the label agree with an independent process code, can a
+comment slot be filled. None of it answers what a client asks first: *if this
+had been running during those 15 sessions, would it have been right?*
+
+That is answerable, because the operators left their answers behind. Each of
+the 601 recovered executions ends with the comment its worker wrote; the tool
+drafts a comment from the same record; the two compare character for
+character. `src/replay.py` does exactly that.
+
+| outcome | n |
+|---|---|
+| `exact` | 189 |
+| `exact_in_memo` | 15 |
+| `mismatch` | **1** |
+| `no_draft` (declined by design) | 103 |
+| `record_not_linked` | 17 |
+| `not_configured` (the 8 other processes) | 276 |
+
+**Comment accuracy where the tool drafted: 204 / 205 = 99.5%.**
+308 of 325 executions on configured processes linked to a portal record.
+
+Per process, the shape is exactly what the definitions predict:
+
+| process | exact | declined | note |
+|---|---|---|---|
+| `fin_invoice_matching` | 42 | 22 | declines are the 調整 exceptions |
+| `hr_expense_settlement` | 76 | 13 | 15 of the 76 were written as Notepad memos |
+| `inv_contract_management` | 32 | 0 | |
+| `hr_leave_application` | 54 | 0 | |
+| `fin_purchase_order_management` | 0 | 68 | cannot draft from the list at all |
+
+**This is the only measured accuracy figure in the project.** `gt.jsonl` never
+arrived, so Step 1 boundary accuracy remains unmeasurable — but comment
+accuracy did not have to stay that way, and it is a more direct measure of
+whether the tool does the job than any of the internal checks.
+
+### Two things the first run got wrong
+
+- **It reported 0.0% accuracy.** Every match was scored a mismatch because
+  some operators write the completion text into Notepad first, as
+  `精算確認メモ / P1-07109774-002 / 経費精算確認済み。費目：…`. The business
+  sentence inside is identical; the header and ID are the operator's own
+  scaffolding. Scored as `exact_in_memo` and counted as correct, with the
+  reasoning stated rather than silently relaxed.
+- **It linked 17 of 601 executions.** Most completion comments name the case
+  only in prose, so an ID lookup finds almost nothing. Linking on
+  (process, variant, amount, date) — what actually identifies a row on these
+  screens — took it to 308. One bug inside that: `variant_map` stores the
+  comment phrase *with* its trailing 。 and the parsed variant has none, so
+  every invoice execution failed to link until both sides were stripped.
+
+The single remaining mismatch is not a tool error: it is one segment holding
+two consecutive leave approvals, so the actual text is two comments
+concatenated. That is a Step 1 segmentation artefact, and at 1 in 205 it is
+not worth chasing.
+
+## 6. Carried into Day 6
 
 - Measure coverage honestly: of the 484 pending records, what share does the
   tool actually complete end to end, and how much operator time does the

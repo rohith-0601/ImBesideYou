@@ -956,6 +956,57 @@ the actual productivity feature rather than a nicety. Three decisions in it:
   pressing on would be guessing. Verified with a deliberately bad record
   mid-batch: two submitted, stopped, counts correct.
 
+### Replay: finally a real accuracy number
+
+Every evaluation so far has been structural — tiling, coverage, agreement with
+an independent code. None of it answers what a client asks first: *if this had
+been running during those sessions, would it have been right?*
+
+It turns out that is answerable, and I should have seen it earlier. The
+operators left their answers behind: every recovered execution ends with the
+comment its worker typed, and the tool drafts a comment from the same record.
+So they compare character for character. `src/replay.py`.
+
+**204 of 205 drafted comments match what the operator actually wrote — 99.5%**,
+across 308 executions linked to a portal record. `fin_invoice_matching` 42
+exact and 22 declined (the 調整 exceptions), `hr_expense_settlement` 76 and 13,
+`inv_contract_management` 32 and 0, `hr_leave_application` 54 and 0,
+`fin_purchase_order_management` 0 and 68 — which is exactly the shape the
+definitions predict.
+
+This is the only measured accuracy figure in the whole project. `gt.jsonl`
+never arrived so Step 1 boundary accuracy stays unmeasurable, but comment
+accuracy never had to be.
+
+**The first run reported 0.0%.** Every single match scored as a mismatch. The
+cause: some operators write the completion text into Notepad first, as
+`精算確認メモ / P1-07109774-002 / 経費精算確認済み。費目：…`. The business
+sentence inside is identical — the header and ID are the operator's own
+scaffolding. I nearly concluded the tool was broken. Scored those as
+`exact_in_memo` and counted them correct, with the reasoning written into the
+module rather than quietly relaxing the comparison.
+
+**The second run linked 17 of 601 executions.** Most completion comments name
+the case only in prose, so an ID lookup finds almost nothing. Linking instead
+on (process, variant, amount, date) — what actually identifies a row on these
+screens — took it to 308. One bug inside that fix: `variant_map` stores the
+comment phrase *with* its trailing 。 while the parsed variant has none, so
+every invoice execution silently failed to link until both sides were
+stripped.
+
+The one remaining mismatch is a segment holding two consecutive leave
+approvals, so the "actual" is two comments concatenated. That is a Step 1
+artefact, and at 1 in 205 not worth chasing.
+
+### README restructured
+
+`README.md` was still the client's brief. Moved it to `TASK.md` and wrote the
+submission README as the **flow of the work** — context → episodes →
+executions → ranking → tool — rather than a day-by-day account. The diary
+belongs here in the work log; the front door should explain how the thing
+works and what it found, with the honest limitations in their own section
+rather than buried.
+
 ### Decisions taken
 
 - **`draftable` replaces `data_access`** as the integration-cost component,
@@ -985,4 +1036,7 @@ inspecting them.
 | `web/src/styles.css` | the design system |
 | `web/src/{App,Sidebar,QueueList,RecordDetail,BulkBar,Toasts}.jsx` | the tool |
 | `portal/processes/inv_contract_management.json` | fourth configured process |
-| `reports/day5_findings.md` | ranking, scope, and the tool |
+| `src/replay.py` | replays the tool against the real executions — 99.5% |
+| `README.md` | submission front door, written as the flow |
+| `TASK.md` | the client's brief, moved off README |
+| `reports/day5_findings.md` | ranking, scope, the tool, and the replay |
