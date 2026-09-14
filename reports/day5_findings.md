@@ -171,7 +171,83 @@ two consecutive leave approvals, so the actual text is two comments
 concatenated. That is a Step 1 segmentation artefact, and at 1 in 205 it is
 not worth chasing.
 
-## 6. Carried into Day 6
+## 6. The blocked process was not blocked — it was one fetch away
+
+Day 4 scored `fin_purchase_order_management` **0 of 81** because the order type
+that decides its branch is not on the list screen. That was right about the
+list and wrong about the portal.
+
+When an operator opens a record the portal renders a **detail pane**, and
+eight of those were captured in `context.extracted_text`. `src/detail_panes.py`
+parses them. The purchase-order pane carries exactly what the list does not:
+
+```
+詳細 — P10-07054374-004        未確認
+name          沖縄物流センター
+emp_id        V3008
+variant       V1_routine_po
+procedure     発注管理 PO-2026-5097
+reason        定期発注：電子基板ユニット　数量 176　合計 842,336円　通常
+```
+
+`reason` is not merely a missing field. It is the **entire body of the
+completion comment**:
+
+```
+発注管理処理。定期発注：電子基板ユニット　数量 176　合計 842,336円　通常。発注書確認・登録完了。
+              └──────────────────── reason, verbatim ────────────────────┘
+```
+
+Checked against every recorded execution: **68 of 68** purchase-order comments
+decompose to `発注管理処理。{reason}。発注書確認・登録完了。`, and 61 of those
+reasons carry the exact shape of the captured pane. So with one per-record
+fetch this process is a string substitution, not a judgement — the same
+conclusion Day 4 reached about `fin_invoice_matching`, arrived at the same way:
+by looking at what the portal actually renders rather than at what the list
+shows.
+
+### The 7 that did not fit revealed a variant nobody had seen
+
+The other 7 of 68 all look like this:
+
+```
+発注変更：事務用品　数量 87　合計 3,206,385円　要注意
+```
+
+**発注変更** ("order change") is a **fifth order type**, and **要注意**
+("requires attention") is a **third urgency value** — neither appears anywhere
+in the list view, which has no urgency column at all. They were invisible
+until the completion comments were parsed. 要注意 is now a second exception arm
+alongside 緊急, so those 7 route to a person.
+
+This is the argument for parsing what operators write rather than only what
+the screen shows: a whole branch of the process existed outside the columns.
+
+### Reframed, not solved
+
+`field_audit.py` now distinguishes a fetch contract that is **specified** from
+one that is **unknown**:
+
+| process | executions | fetch contract |
+|---|---|---|
+| `fin_purchase_order_management` | 68 | **specified** |
+| `fin_payment_processing` | 36 | unknown |
+| `hr_onboarding_verification` | 31 | unknown |
+
+**68 of those 135 executions are an integration task with a known shape**, not
+a blocked process. The definition now carries a `detail_source` block naming
+the field, what it fills, the evidence behind it, and — honestly — its status:
+*specified, not implemented*. Only one pane was captured, so the mock cannot
+serve 81 details, and the real endpoint has still never been seen.
+
+The process-definition validator was extended to enforce this: a field may
+come from a list column **or** a declared `detail_source`, but a template slot
+with no stated source is now a validation error. It caught two mistakes in the
+new definition while I was writing it — an exception field with no source, and
+`urgency`, which is parsed out of the composite `reason` string rather than
+returned on its own.
+
+## 7. Carried into Day 6
 
 - Measure coverage honestly: of the 484 pending records, what share does the
   tool actually complete end to end, and how much operator time does the

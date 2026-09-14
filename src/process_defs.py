@@ -25,6 +25,8 @@ leaves the bound null.
 
 from __future__ import annotations
 
+import re
+
 import json
 from pathlib import Path
 
@@ -168,6 +170,24 @@ DEFINITIONS = {
         "evidence": {"executions": 47, "operators": 4,
                      "browser_only_share": 0.170, "exception_rate": 0.0},
     },
+    # Day 5: reclassified from "cannot be automated" to "one fetch away".
+    #
+    # Day 4 scored this 0 of 81 because the order type is not on the list
+    # screen. That was right about the list and wrong about the portal: when
+    # an operator opens a record, the detail pane carries a `reason` field,
+    # and `reason` is the entire body of the completion comment —
+    #
+    #   reason : 定期発注：電子基板ユニット　数量 176　合計 842,336円　通常
+    #   comment: 発注管理処理。<reason>。発注書確認・登録完了。
+    #
+    # Verified across every recorded execution: 68/68 comments decompose to
+    # that template, and 61/68 reasons carry the exact shape seen in the one
+    # captured detail pane. With a per-record fetch this is a string
+    # substitution, not a judgement.
+    #
+    # The other 7 revealed a fifth order type the list never showed:
+    # 発注変更 ("order change"), carrying urgency 要注意 ("requires
+    # attention"). Treated as an exception arm alongside 緊急.
     "fin_purchase_order_management": {
         "label": "fin_purchase_order_management",
         "display_name": "発注管理",
@@ -178,32 +198,37 @@ DEFINITIONS = {
         "transition": "未確認 -> 完了",
         "transitions_observed": 26,
         "confirmation": "完了しました",
-        "comment_template": ("発注管理処理。{variant}：{item}　数量 {qty}　"
-                             "合計 {amount}円　{urgency}。発注書確認・登録完了。"),
-        # The list view carries only the PO number in 項目 ("発注管理
-        # PO-2026-5156"). The order type that determines the branch is NOT
-        # exposed there — it appears only in the completion comment, i.e.
-        # after the worker has opened the record. So the variant cannot be
-        # read from the list, and the tool must open each record to classify
-        # it. Caught by validate(); recorded rather than papered over.
+        "comment_template": "発注管理処理。{reason}。発注書確認・登録完了。",
         "variant_field": None,
         "variant_source": "record_detail",
-        "variants": ["年間契約", "スポット発注", "定期発注", "緊急発注"],
-        "exception_field": None,
-        "exception_values": ["緊急発注"],
+        # What a per-record fetch has to return for this process to be
+        # draftable. Specified from evidence, not implemented: only one detail
+        # pane was captured, and the real endpoint has never been seen.
+        "detail_source": {
+            "field": "reason",
+            # `reason` is a composite: "定期発注：電子基板ユニット　数量 176
+            # 　合計 842,336円　通常" carries the order type, item, quantity,
+            # amount and urgency in one string. The urgency token at the end
+            # is what routes the case, so it is declared here even though it
+            # is parsed out of `reason` rather than returned separately.
+            "fills": ["reason", "urgency"],
+            "evidence": "1 detail pane captured; 68/68 comments match the template",
+            "status": "specified, not implemented — see HttpPortalClient.getRecord",
+        },
+        "variants": ["年間契約", "スポット発注", "定期発注", "緊急発注", "発注変更"],
+        "exception_field": "urgency",
+        "exception_values": ["緊急", "要注意"],
         "rule": {
-            "checks": ["発注区分 determines routing",
-                       "緊急発注 is flagged for expedited handling"],
+            "checks": ["reason is copied verbatim into the comment body",
+                       "urgency 緊急 or 要注意 routes to a person"],
             "threshold": None,
-            "note": ("Exception rate by variant is exactly 1.0 for 緊急発注 "
-                     "and 0.0 for the other three, so the branch is a "
-                     "labelled property of the order. But it is not visible "
-                     "in the list view, so it is known only after opening "
-                     "the record — a per-record fetch the other two "
-                     "processes do not need. Day 5 build risk."),
+            "note": ("Draftable only after a per-record fetch: the list view "
+                     "carries neither the order type nor the amount. 要注意 "
+                     "was invisible until the completion comments were "
+                     "parsed — the list shows no urgency column at all."),
         },
         "evidence": {"executions": 68, "operators": 4,
-                     "browser_only_share": 0.735, "exception_rate": 0.132},
+                     "browser_only_share": 0.735, "exception_rate": 0.235},
     },
 }
 
@@ -228,17 +253,43 @@ def validate(defn: dict) -> list[str]:
     if defn.get("variant_field") and defn["variant_field"] not in defn.get("columns", []):
         problems.append(f"variant_field {defn['variant_field']!r} "
                         f"is not one of the screen's columns")
+    # A field may come from the list screen or from a per-record fetch. Both
+    # are legitimate; what is not legitimate is a field with no stated source.
+    detail = defn.get("detail_source") or {}
+    detail_fields = set(detail.get("fills") or [])
+    if detail.get("field"):
+        detail_fields.add(detail["field"])
+
     ex = defn.get("exception_field")
-    if ex and ex not in defn.get("columns", []):
-        problems.append(f"exception_field {ex!r} is not one of the "
-                        f"screen's columns")
+    if ex and ex not in defn.get("columns", []) and ex not in detail_fields:
+        problems.append(f"exception_field {ex!r} is neither a screen column "
+                        f"nor declared in detail_source.fills")
+
     tpl = defn.get("comment_template", "")
-    if "{variant}" not in tpl:
-        problems.append("comment_template has no {variant} slot")
+    slots = set(re.findall(r"\{(\w+)\}", tpl))
+    if not slots:
+        problems.append("comment_template has no slots")
+    # Every slot must be fillable from somewhere: a list column, the variant
+    # field, the detail fetch, or one of the values assist derives.
+    derived = {"amount", "date", "case", "item", "qty", "urgency", "variant"}
+    unknown = slots - derived - detail_fields - set(defn.get("columns", []))
+    if unknown:
+        problems.append(f"comment_template slots with no source: "
+                        f"{sorted(unknown)}")
+    if "variant" in slots and not (defn.get("variant_field")
+                                   or defn.get("variant_source")):
+        problems.append("template uses {variant} but no variant source given")
+
     # A process whose variant is not a list column must say where it comes
     # from instead, so the tool knows it needs a per-record fetch.
     if defn.get("variant_field") is None and not defn.get("variant_source"):
         problems.append("variant_field is null but no variant_source given")
+
+    # If it needs a fetch, it has to say what the fetch returns - otherwise
+    # "needs a fetch" is an excuse rather than a specification.
+    if defn.get("variant_source") == "record_detail" and not detail:
+        problems.append("variant_source is record_detail but no "
+                        "detail_source specified")
     return problems
 
 

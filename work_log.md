@@ -998,6 +998,53 @@ The one remaining mismatch is a segment holding two consecutive leave
 approvals, so the "actual" is two comments concatenated. That is a Step 1
 artefact, and at 1 in 205 not worth chasing.
 
+### The blocked process was one fetch away
+
+I had written `fin_purchase_order_management` off twice — 0 of 81, list view
+lacks the deciding field. Before accepting that for the report I went looking
+for what the portal renders when an operator *opens* a record, since the Day 4
+screenshots clearly showed a detail pane.
+
+Eight were captured in `extracted_text`. The purchase-order one carries a
+`reason` field that is the **entire body of the completion comment**:
+
+    reason : 定期発注：電子基板ユニット　数量 176　合計 842,336円　通常
+    comment: 発注管理処理。<reason>。発注書確認・登録完了。
+
+Checked it properly rather than on one example: **68 of 68** recorded
+purchase-order comments decompose to that template, 61 with the exact shape of
+the captured pane. So one fetch makes it a string substitution. Same lesson as
+the 種別 discovery on Day 4 — look at what the portal renders, not at what the
+list column shows.
+
+**The 7 that did not fit were the most useful part.** They read
+`発注変更：事務用品　数量 87　合計 3,206,385円　要注意` — a **fifth order
+type** and a **third urgency value**, neither of which appears in the list view
+at all (there is no urgency column). A whole branch of the process existed
+outside the columns and was invisible until the comments were parsed. 要注意
+now routes to a person alongside 緊急.
+
+I did not overclaim it as solved. Only one pane was captured, so the mock
+cannot serve 81 details and the real endpoint has still never been seen. The
+definition carries a `detail_source` block naming the field, what it fills,
+the evidence, and the status: *specified, not implemented*. `field_audit.py`
+now reports "fetch contract: specified" versus "unknown", which turns 68 of
+the 135 supposedly-blocked executions into an integration task with a known
+shape.
+
+**The validator earned its keep.** I extended it so a field may come from a
+list column or a declared `detail_source`, and a template slot with no stated
+source is an error. It immediately rejected my new definition twice: an
+exception field with no source, then `urgency` — which is parsed out of the
+composite `reason` string rather than returned separately, and I had not said
+so. Both were real omissions, not false positives.
+
+One self-inflicted detour: my first attempt to replace the definition used a
+regex to find the block boundaries, which cut the file mid-dict and produced a
+syntax error. Restored from git and replaced it by line range instead. Not
+interesting except as a reminder that structured edits to structured files
+should not be done with pattern matching.
+
 ### README restructured
 
 `README.md` was still the client's brief. Moved it to `TASK.md` and wrote the
@@ -1037,6 +1084,8 @@ inspecting them.
 | `web/src/{App,Sidebar,QueueList,RecordDetail,BulkBar,Toasts}.jsx` | the tool |
 | `portal/processes/inv_contract_management.json` | fourth configured process |
 | `src/replay.py` | replays the tool against the real executions — 99.5% |
+| `src/detail_panes.py` | recovers record detail panes; specifies the fetch contract |
+| `portal/detail_contract.json` | what a per-record fetch must return, per process |
 | `README.md` | submission front door, written as the flow |
 | `TASK.md` | the client's brief, moved off README |
 | `reports/day5_findings.md` | ranking, scope, the tool, and the replay |

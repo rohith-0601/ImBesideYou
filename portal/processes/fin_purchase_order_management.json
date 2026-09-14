@@ -21,31 +21,42 @@
   "transition": "未確認 -> 完了",
   "transitions_observed": 26,
   "confirmation": "完了しました",
-  "comment_template": "発注管理処理。{variant}：{item}　数量 {qty}　合計 {amount}円　{urgency}。発注書確認・登録完了。",
+  "comment_template": "発注管理処理。{reason}。発注書確認・登録完了。",
   "variant_field": null,
   "variant_source": "record_detail",
+  "detail_source": {
+    "field": "reason",
+    "fills": [
+      "reason",
+      "urgency"
+    ],
+    "evidence": "1 detail pane captured; 68/68 comments match the template",
+    "status": "specified, not implemented — see HttpPortalClient.getRecord"
+  },
   "variants": [
     "年間契約",
     "スポット発注",
     "定期発注",
-    "緊急発注"
+    "緊急発注",
+    "発注変更"
   ],
-  "exception_field": null,
+  "exception_field": "urgency",
   "exception_values": [
-    "緊急発注"
+    "緊急",
+    "要注意"
   ],
   "rule": {
     "checks": [
-      "発注区分 determines routing",
-      "緊急発注 is flagged for expedited handling"
+      "reason is copied verbatim into the comment body",
+      "urgency 緊急 or 要注意 routes to a person"
     ],
     "threshold": null,
-    "note": "Exception rate by variant is exactly 1.0 for 緊急発注 and 0.0 for the other three, so the branch is a labelled property of the order. But it is not visible in the list view, so it is known only after opening the record — a per-record fetch the other two processes do not need. Day 5 build risk."
+    "note": "Draftable only after a per-record fetch: the list view carries neither the order type nor the amount. 要注意 was invisible until the completion comments were parsed — the list shows no urgency column at all."
   },
   "evidence": {
     "executions": 68,
     "operators": 4,
     "browser_only_share": 0.735,
-    "exception_rate": 0.132
+    "exception_rate": 0.235
   }
 }

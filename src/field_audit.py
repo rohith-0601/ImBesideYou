@@ -39,6 +39,15 @@ Outcomes per slot:
   visible      resolvable from a list column
   detail_only  exists in the completion comments but never on the list screen
   derived      computed rather than read (e.g. the amount, already numeric)
+
+Day 5 addendum: "needs the record opened" is not the same as "cannot be
+automated", and the first version of this module blurred them. When an
+operator opens a record the portal renders a detail pane, and eight of those
+were captured in the screen text. For `fin_purchase_order_management` the pane
+carries a `reason` field that is the entire body of the completion comment, so
+one fetch turns a process scored 0-of-81 into a string substitution. The
+audit now reports whether a process's fetch contract is **specified** (a
+`detail_source` block backed by an observed pane) or still **unknown**.
 """
 
 from __future__ import annotations
@@ -51,6 +60,7 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONTRACT = REPO_ROOT / "portal" / "contract.json"
+PROCESS_DIR = REPO_ROOT / "portal" / "processes"
 
 # Process -> the list screen it is worked on. Two processes share one screen
 # (Day 3 §2), which the mapping preserves.
@@ -100,6 +110,24 @@ SLOT_SOURCES: dict[str, dict[str, str]] = {
 }
 
 
+def fetch_status(process: str) -> str:
+    """Is the per-record fetch this process needs actually specified?
+
+    A process that needs the record opened is only blocked while nobody knows
+    what opening it returns. Where a detail pane was captured, the contract is
+    written into the process definition and the work becomes an integration
+    task with a known shape.
+    """
+    f = PROCESS_DIR / f"{process}.json"
+    if not f.exists():
+        return "not configured"
+    d = json.loads(f.read_text(encoding="utf-8"))
+    if d.get("variant_source") != "record_detail":
+        return "not needed"
+    ds = d.get("detail_source")
+    return "specified" if ds else "unknown"
+
+
 def audit(ex: pd.DataFrame, contract: dict) -> pd.DataFrame:
     """One row per process: can every comment slot be filled from a list row?"""
     rows = []
@@ -137,6 +165,7 @@ def audit(ex: pd.DataFrame, contract: dict) -> pd.DataFrame:
             "from_list": ",".join(visible) or "—",
             "needs_detail": ",".join(detail) or "—",
             "verdict": verdict,
+            "fetch": fetch_status(process),
         })
     order = {"list_sufficient": 0, "partial": 1, "detail_required": 2,
              "no_template": 3}
@@ -220,8 +249,15 @@ def main() -> None:
           f"({100 * blocked.executions.sum() / tot:.0f}%)")
     full = a[a.verdict == "detail_required"]
     if len(full):
-        print(f"\nfully blocked (every slot needs the record opened): "
-              f"{', '.join(full.process)}")
+        print("\nevery slot needs the record opened:")
+        for r in full.itertuples():
+            print(f"    {r.process:32s} fetch contract: {r.fetch}")
+        spec = full[full.fetch == "specified"]
+        if len(spec):
+            print(f"\n{spec.executions.sum()} of those "
+                  f"{full.executions.sum()} executions are on a process whose "
+                  f"fetch contract is specified — an integration task with a "
+                  f"known shape, not a blocked process.")
 
     print("\n=== is the deciding field an input or an output? ===")
     for screen, field in [("請求書承認・経費精算", "種別"),
