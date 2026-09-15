@@ -245,7 +245,7 @@ memo header.
 the work; the client brief moved to `TASK.md`.
 See [`reports/day5_findings.md`](reports/day5_findings.md).
 
-## Day 6 — Harden, test, and the honest analysis
+## Day 6 — Coverage, residual work, risks, and the report ✅
 
 - Test against real logged cases; measure what fraction the tool actually
   covers.
@@ -253,6 +253,26 @@ See [`reports/day5_findings.md`](reports/day5_findings.md).
   **what manual work remains after deployment** (with realistic expected
   impact, not best-case), and **anticipated implementation/rollout risks
   with mitigations** — each risk tied to the evidence that suggested it.
+
+**Outcome:** coverage measured against the 601 executions that actually
+happened rather than a pending snapshot — **222 drafted (68% of in-scope, 37%
+of all observed work)**, 35 exceptions, 68 awaiting the specified fetch. A
+first run overstated this at 235 drafted with *zero* exceptions for
+`hr_expense_settlement`, because the execution's variant is the 費目 while the
+exception turns on 種別, which exists only on the record; fixed by reusing
+`replay.link_records`.
+
+**No time-saved figure is offered, and the report says why.** An execution
+boundary *is* the completion marker, so its duration spans opening, checking
+and writing with no seam between them — and compressed waiting time means even
+a clean decomposition would not transfer.
+
+Wrote `FINAL_REPORT.md`, the deliverable that did not previously exist as a
+document: Step 2 analysis and prioritisation, what was built and why that
+process/scope/form with alternatives rejected, residual manual work with the
+three deductions that sit between 68% and any real saving, seven risks each
+tied to its evidence, and the day allocation. All three required deliverables
+are now linked from the README.
 
 ## Day 7 — Report, work log, packaging
 

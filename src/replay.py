@@ -134,6 +134,47 @@ def draft_for(defn: dict, rec: dict) -> tuple[str | None, list[str]]:
     return tpl.format(**{s: values[s] for s in slots}), []
 
 
+def link_records(records: dict, definitions: dict):
+    """Build a function mapping one execution row to its portal record.
+
+    Exposed because `coverage.py` needs the same linkage: the field that routes
+    an exception often lives on the record rather than in the comment.
+    """
+    by_id: dict[str, dict] = {}
+    by_key: dict[tuple, dict] = {}
+    for process, recs in records.items():
+        defn = definitions.get(process)
+        vf = defn.get("variant_field") if defn else None
+        for r in recs:
+            by_id[r["ID"]] = r
+            amt = _AMOUNT_RE.search(r.get("金額") or "")
+            key = (
+                process,
+                r.get(vf) if vf else None,
+                int(amt.group(1).replace(",", "")) if amt else None,
+                r.get("期間・詳細") or r.get("対象年月"),
+            )
+            by_key.setdefault(key, r)
+
+    def link(row) -> dict | None:
+        if isinstance(getattr(row, "case_ref", None), str) and row.case_ref in by_id:
+            return by_id[row.case_ref]
+        defn = definitions.get(row.label_final)
+        if defn is None:
+            return None
+        amount = row.amount_yen if pd.notna(row.amount_yen) else None
+        variant = row.variant if isinstance(row.variant, str) else None
+        if variant and defn.get("variant_map"):
+            inv_map = {v.rstrip("。"): k for k, v in defn["variant_map"].items()}
+            variant = inv_map.get(variant.rstrip("。"), variant)
+        date = row.effective_date if isinstance(row.effective_date, str) else None
+        return by_key.get(
+            (row.label_final, variant, int(amount) if amount else None, date)
+        )
+
+    return link
+
+
 def replay(ex: pd.DataFrame, records: dict, definitions: dict) -> pd.DataFrame:
     """One row per real execution: what the tool would have produced."""
     # Index the harvested records two ways. Most completion comments name the

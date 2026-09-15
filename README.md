@@ -4,7 +4,17 @@
 Indian Institute of Technology, Hyderabad — Engineering Science
 es24btech11026@iith.ac.in
 
-Submission for the FDE intern selection task. The client's brief is in
+Submission for the FDE intern selection task.
+
+**The three required deliverables:**
+
+| | |
+|---|---|
+| Step 1 output | [`segments/segments.jsonl`](segments/segments.jsonl) — 601 executions across 15 dataset B sessions |
+| Final report | [`FINAL_REPORT.md`](FINAL_REPORT.md) — analysis, prioritisation, what was built, residual work, risks, day allocation |
+| Work log | [`work_log.md`](work_log.md) — what was tried each day, what failed, and how generative AI was used |
+
+This README explains how the whole thing works. The client's brief is in
 [`TASK.md`](TASK.md); the data specification in
 [`DATA_SCHEMA.md`](DATA_SCHEMA.md).
 
@@ -311,6 +321,7 @@ python replay.py             # the accuracy measurement
 | `server/` | Express API and the portal adapter |
 | `web/` | React operator tool |
 | `reports/` | findings per stage, generated tables kept separate from interpretation |
+| `FINAL_REPORT.md` | **required deliverable** — the report and its four mandated sections |
 | `work_log.md` | **required deliverable** — what was tried, what failed, and why |
 | `PLAN.md` | the 7-day allocation and its rationale |
 

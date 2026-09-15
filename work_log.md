@@ -1130,3 +1130,95 @@ inspecting them.
 | `README.md` | submission front door, written as the flow |
 | `TASK.md` | the client's brief, moved off README |
 | `reports/day5_findings.md` | ranking, scope, the tool, and the replay |
+
+---
+
+## Day 6
+
+**Goal:** measure what the tool actually covers, and write the two sections the
+brief names specifically — residual manual work with realistic impact, and
+rollout risks each tied to its evidence.
+
+### The number I could not produce
+
+I set out to estimate time saved per execution and could not, honestly.
+
+An execution boundary **is** the completion marker, by construction of the Day
+2 segmentation — the median gap from marker to segment end is 0.0s. So the
+recorded duration spans everything from opening the record to writing the
+comment, with no seam between "checking" and "composing". I tried to find that
+seam from event structure: the gap from first clipboard event to the marker is
+bimodal, a median of 0.1s on some processes and 8–15s on others, which reflects
+whether the operator copied before or after composing rather than how long
+composing took. And the brief says waiting time was compressed in the
+recording, so even a clean decomposition would not transfer.
+
+So the report states a bound and declines to convert it into minutes. That is a
+worse-looking answer than a number would have been, and the right one — a
+time-saved figure here would have been arithmetic dressed as evidence.
+
+### Coverage, measured against what actually happened
+
+`src/coverage.py`, applied to the 601 observed executions rather than to the
+pending queue (which is a snapshot of whatever happened to be outstanding).
+
+| outcome | executions | share |
+|---|---|---|
+| drafted | **222** | 37% of all, **68% of in-scope** |
+| exception → a person | 35 | 6% |
+| needs the specified fetch | 68 | 11% |
+| out of scope | 276 | 46% |
+
+**A bug worth recording, because it inflated the headline.** My first run
+reported 235 drafted and **zero** exceptions for `hr_expense_settlement` — a
+process that routes 45% of its records to a person. The execution's variant is
+the 費目 (交通費精算, 出張旅費…) while the exception turns on 種別 (定常/調整),
+which exists only on the record. Classifying from the comment alone could never
+see it. Fixed by reusing `replay.link_records`, which dropped the figure from
+235 to 222 and raised exceptions from 22 to 35. The number got worse and the
+claim got true.
+
+### Writing the risk section
+
+Seven risks, each tied to the evidence that raised it rather than to a generic
+checklist. The one I would put first is that **the terminal action has never
+been observed** — 7 `✓ 承認` clicks in 20,477 events. Writing it up clarified
+that the design already contains it: nothing depends on an unverified write,
+because the tool prepares and a human commits. That was a consequence of the
+human-in-the-loop decision rather than a plan, but it is the correct
+containment.
+
+The most interesting risk to write was 4.5 — a whole branch can be invisible in
+the list view. It generalises the 発注変更/要注意 discovery: the screen the tool
+reads is not the whole record, and a variant you cannot see is one you cannot
+route. The mitigation is what found it in the first place — treat a comment
+that fails to parse as a signal rather than as noise.
+
+### The deliverable that did not exist
+
+Rohith asked me to check the three submission artefacts were intact. Two were:
+`segments.jsonl` (601 lines, 15/15 sessions, 0 schema problems) and
+`work_log.md`. **The final report did not exist as a document.** There were
+per-stage findings in `reports/` and the README front door, but nothing
+consolidating the four sections the brief mandates. Written now as
+`FINAL_REPORT.md`, and linked from the README so all three deliverables are
+findable from the front page.
+
+Also caught a figure I had written from memory in it — "four config entries
+covers 4,000s" when the five configured processes total 5,000s. Recomputed and
+corrected. That is the second time this week a number written from memory was
+wrong; every figure in the report is now one I ran a command to get.
+
+### Generative AI usage
+
+Claude Code (Opus 5): `coverage.py`, and drafting the report and this entry.
+The classification bug was caught by disbelieving a suspiciously clean result —
+zero exceptions on a process I knew routes 45% of its records — which is the
+same pattern as the rest of the week.
+
+### Artifacts
+
+| file | what it is |
+|---|---|
+| `src/coverage.py` | coverage against observed work; explicit about what is unmeasurable |
+| `FINAL_REPORT.md` | **required deliverable** — the consolidated report |
