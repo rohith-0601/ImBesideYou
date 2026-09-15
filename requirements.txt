@@ -1,4 +1,7 @@
+# Analysis pipeline only. The tool itself (server/ and web/) has no Python
+# dependency — see RUNNING.md.
+#
+# matplotlib and tabulate were listed here early on and never imported; they
+# were removed rather than left as a false signal about what the code needs.
 pandas>=2.0
 numpy>=1.24
-matplotlib>=3.7
-tabulate>=0.9

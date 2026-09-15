@@ -6,8 +6,16 @@ end that proxies `/api` to it.
 ## Prerequisites
 
 - Node 18+ (developed on 26)
-- Python 3.11+ with the analysis venv, only if you want to regenerate the
-  portal artefacts
+- Python 3.11+, only if you want to regenerate the portal artefacts from the
+  raw logs. The tool itself needs no Python.
+
+The committed artefacts (`portal/`, `segments/`) mean the app runs from a
+fresh clone without the 12 GB of raw data.
+
+> If `npm install` reports that install scripts were skipped, Vite's `esbuild`
+> binary will not have been fetched. Run `npm install-scripts approve esbuild`
+> then `npm rebuild esbuild`. This is an npm security setting, not a repo
+> problem.
 
 ## 1. Start the API
 

@@ -151,11 +151,6 @@ button { font: inherit; color: inherit; }
   overflow: hidden;
 }
 
-@media (max-width: 1100px) {
-  .shell { grid-template-columns: 200px 1fr; }
-  .shell .detail-pane { display: none; }
-}
-
 /* -------------------------------------------------------------- sidebar -- */
 
 .sidebar {
@@ -516,4 +511,79 @@ kbd {
   *, *::before, *::after {
     animation-duration: .01ms !important; transition-duration: .01ms !important;
   }
+}
+
+/* ==========================================================================
+   Responsive
+
+   These sit at the end deliberately. They were originally next to the .shell
+   rules, where `.sidebar { display: flex }` further down the file overrode
+   `display: none` inside the breakpoint and left the sidebar stacked on top
+   of the queue at phone width.
+   ========================================================================== */
+
+/* Shown only in the drawer layout. */
+.drawer-close {
+  display: none; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--surface); cursor: pointer; font-size: 14px;
+  line-height: 1; color: var(--fg-muted);
+}
+.drawer-close:hover { background: var(--n-50); }
+
+/* Horizontal queue switcher, for when the sidebar is gone. */
+.mobile-queues {
+  display: none; gap: var(--sp-2); overflow-x: auto;
+  padding: var(--sp-3) var(--sp-4) 0;
+  border-bottom: 1px solid var(--line); background: var(--surface);
+  scrollbar-width: none;
+}
+.mobile-queues::-webkit-scrollbar { display: none; }
+.mobile-queues button {
+  flex: 0 0 auto; padding: 5px 11px 9px; border: 0; background: none;
+  border-bottom: 2px solid transparent; cursor: pointer;
+  font-size: 12.5px; color: var(--fg-muted); white-space: nowrap;
+}
+.mobile-queues button[aria-current="true"] {
+  color: var(--accent); border-bottom-color: var(--accent); font-weight: 600;
+}
+
+.scrim {
+  position: fixed; inset: 0; z-index: 35;
+  background: rgba(26, 26, 23, .32);
+  animation: fade 140ms var(--ease);
+}
+@keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+
+/* Below the three-pane breakpoint the detail becomes a drawer rather than
+   disappearing. Hiding it left the queue visible with no way to read a
+   comment or approve anything, while the keyboard hints still advertised
+   both — the tool silently became read-only. */
+@media (max-width: 1100px) {
+  .shell { grid-template-columns: 200px 1fr; }
+
+  .shell .detail-pane {
+    position: fixed; inset: 0 0 0 auto;
+    width: min(440px, 100%);
+    z-index: 40;
+    border-left: 1px solid var(--line);
+    box-shadow: var(--shadow-lg);
+    transform: translateX(100%);
+    transition: transform 180ms var(--ease);
+  }
+  .shell .detail-pane.is-open { transform: none; }
+  .drawer-close { display: inline-flex; }
+}
+
+@media (max-width: 620px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .mobile-queues { display: flex; }
+  .queue-head { padding: var(--sp-4) var(--sp-4) var(--sp-3); }
+  .queue-list { padding-inline: var(--sp-3); }
+  .bulk { padding-inline: var(--sp-4); }
+  .stats { gap: var(--sp-4); }
+  .row { grid-template-columns: 14px 1fr auto; }
+  .row .rid { display: none; }
 }

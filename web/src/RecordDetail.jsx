@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { subjectOf, visibleFields } from './format.js'
 
-export default function RecordDetail({ item, queue, onApprove, editing, setEditing }) {
+export default function RecordDetail({
+  item, queue, onApprove, editing, setEditing, open, onClose,
+}) {
   const [draft, setDraft] = useState(item?.comment ?? '')
   const areaRef = useRef(null)
 
@@ -16,7 +18,7 @@ export default function RecordDetail({ item, queue, onApprove, editing, setEditi
 
   if (!item) {
     return (
-      <section className="detail-pane">
+      <section className={open ? 'detail-pane is-open' : 'detail-pane'}>
         <div className="empty" style={{ marginTop: 'auto', marginBottom: 'auto' }}>
           <strong>No record selected</strong>
           Pick one from the queue.
@@ -31,12 +33,24 @@ export default function RecordDetail({ item, queue, onApprove, editing, setEditi
   const notes = item.notes ?? []
 
   return (
-    <section className="detail-pane" aria-label="Record detail">
+    <section
+      className={open ? 'detail-pane is-open' : 'detail-pane'}
+      aria-label="Record detail"
+    >
       <header className="detail-head">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <span className="rid mono">{rec.ID}</span>
-          <span className={item.needs_review ? 'badge is-review' : 'badge is-ready'}>
-            {item.needs_review ? 'Needs a person' : 'Drafted'}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className={item.needs_review ? 'badge is-review' : 'badge is-ready'}>
+              {item.needs_review ? 'Needs a person' : 'Drafted'}
+            </span>
+            <button
+              className="drawer-close"
+              onClick={onClose}
+              aria-label="Close record detail"
+            >
+              ×
+            </button>
           </span>
         </div>
         <h3 className="jp">{subjectOf(rec)}</h3>

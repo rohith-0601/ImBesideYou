@@ -274,7 +274,7 @@ three deductions that sit between 68% and any real saving, seven risks each
 tied to its evidence, and the day allocation. All three required deliverables
 are now linked from the README.
 
-## Day 7 — Report, work log, packaging
+## Day 7 — Packaging and the UI gap ✅
 
 - Final report: Step 2 analysis and prioritisation, what was built and why
   that process/scope/form, alternatives rejected and why, residual manual
@@ -284,6 +284,18 @@ are now linked from the README.
 - Repo packaging and a clean run-through from a fresh clone.
 
 ---
+
+**Outcome:** the UI was not done. Below 1100px the detail pane was hidden
+entirely, so the queue rendered while the tool silently became read-only —
+with the keyboard hints still advertising approve and edit. Replaced with a
+drawer (scrim, close button, `Esc`); below 620px the sidebar becomes a
+horizontal queue switcher. The first fix failed too, because the media queries
+sat above the component rules they needed to override.
+
+Verified the submission from a clean clone: all three deliverables present,
+`npm test` 12/12, API starts with five queues, front end builds — and the
+committed `portal/` artefacts mean it runs without the 12 GB of raw data.
+Trimmed `requirements.txt`, which listed two packages the code never imports.
 
 ## Step 3 form: web application
 

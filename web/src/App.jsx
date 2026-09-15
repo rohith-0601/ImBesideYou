@@ -18,6 +18,10 @@ export default function App() {
   const [toasts, setToasts] = useState([])
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkDone, setBulkDone] = useState(0)
+  // Below 1100px the detail pane is a drawer, so selecting a record has to
+  // open it explicitly. Above that the class is inert and the pane is always
+  // visible.
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const toastSeq = useRef(0)
 
   const toast = useCallback((msg, { id, error } = {}) => {
@@ -177,6 +181,20 @@ export default function App() {
         <Sidebar processes={processes} active={active} onPick={setActive} />
 
         <main className="queue-pane">
+          {/* Sidebar is hidden on the narrowest layout; queues stay reachable. */}
+          <nav className="mobile-queues" aria-label="Processes">
+            {processes.map((p) => (
+              <button
+                key={p.label}
+                aria-current={p.label === active}
+                onClick={() => setActive(p.label)}
+              >
+                <span className="jp">{p.display_name}</span>{' '}
+                <span className="num">{p.pending ?? 0}</span>
+              </button>
+            ))}
+          </nav>
+
           <header className="queue-head">
             <div className="queue-title">
               <h2 className="jp">{queue?.display_name ?? activeProcess?.display_name ?? '—'}</h2>
@@ -221,7 +239,11 @@ export default function App() {
           <QueueList
             items={ordered}
             selectedId={selectedId}
-            onSelect={(id) => { setSelectedId(id); setEditing(false) }}
+            onSelect={(id) => {
+              setSelectedId(id)
+              setEditing(false)
+              setDrawerOpen(true)
+            }}
             loading={loading}
           />
         </main>
@@ -232,8 +254,14 @@ export default function App() {
           onApprove={approve}
           editing={editing}
           setEditing={setEditing}
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
         />
       </div>
+
+      {drawerOpen && (
+        <div className="scrim" onClick={() => setDrawerOpen(false)} />
+      )}
 
       <Toasts toasts={toasts} />
     </>

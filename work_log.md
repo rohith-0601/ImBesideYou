@@ -1222,3 +1222,61 @@ same pattern as the rest of the week.
 |---|---|
 | `src/coverage.py` | coverage against observed work; explicit about what is unmeasurable |
 | `FINAL_REPORT.md` | **required deliverable** — the consolidated report |
+
+---
+
+## Day 7
+
+**Goal:** package the repository so it works for someone who has never seen it,
+and close the UI gap found while reviewing.
+
+### The UI was not done, and the gap was a real one
+
+Rohith asked whether the UI was finished. Rather than answer from memory I ran
+it and looked — at several widths, which I had not done before.
+
+**Below 1100px the detail pane was hidden entirely.** The queue rendered
+normally, so nothing looked broken, but there was no way to read a drafted
+comment or approve anything. The keyboard hints at the bottom of the sidebar
+still advertised "approve" and "edit" with no such controls present. The tool
+silently became read-only, which is worse than visibly breaking.
+
+Replaced the hide with a proper drawer: selecting a record slides the detail
+in over the queue, with a scrim, a close button and `Esc` to dismiss. Below
+620px the sidebar is replaced by a horizontal queue switcher and the record-ID
+column is dropped, since the operator's own name-and-amount line is what they
+actually scan.
+
+**Then the first fix did not work either**, and for an instructive reason. At
+phone width the sidebar was still stacked above the queue. My media queries sat
+next to the `.shell` rules near the top of the stylesheet, while
+`.sidebar { display: flex }` is declared further down — equal specificity, later
+rule wins. Moved the whole responsive block to the end of the file with a
+comment explaining why it lives there. A reminder that CSS cascade bugs look
+exactly like rules that "did not apply".
+
+### Packaging
+
+Cloned the repository into a scratch directory and worked through it as a
+grader would. Three things came out of it:
+
+- **All three deliverables are present in a clean clone** — `segments.jsonl`
+  (601 lines), `FINAL_REPORT.md`, `work_log.md` — and the committed `portal/`
+  artefacts mean the app runs **without the 12 GB of raw data**. `npm install`
+  then `npm test` passes 12/12 and the API starts with all five queues loaded.
+  The front end builds.
+- **`requirements.txt` was lying.** It listed `matplotlib` and `tabulate`,
+  neither of which is imported anywhere — left over from Day 1 when I expected
+  to plot things and never did. Trimmed to `pandas` and `numpy`, with a note
+  saying why. A dependency list that overstates what the code needs is a small
+  dishonesty that costs someone else time.
+- **Noted the `esbuild` postinstall gotcha** in `RUNNING.md`. npm's install-
+  script gating blocks the binary Vite needs, which would look like a broken
+  repo rather than a local security setting.
+
+### Generative AI usage
+
+Claude Code (Opus 5): the drawer implementation and the packaging pass. The
+narrow-layout hole and the cascade bug were both found by rendering the app at
+different widths and looking at the screenshots — the same "run it and
+disbelieve it" pattern that produced most of this week's findings.
