@@ -385,7 +385,7 @@ surface rather than removing one.
 | 4 | Portal contract; field audit; first build | ~14% |
 | 5 | Corrected ranking; the operator tool; replay | ~21% |
 | 6 | Coverage, residual work, risks, this report | ~14% |
-| 7 | Packaging and final pass | ~9% |
+| 7 | Packaging; fixed a narrow-width UI hole | ~9% |
 
 Roughly **40% on Steps 1–2** and **45% on Step 3**, with real time for the
 report rather than treating it as leftover.

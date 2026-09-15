@@ -35,7 +35,7 @@ What came out of it:
 | Units of work recovered | **601 case executions** across **13 processes** |
 | Automation candidates ranked | 13, on explicit and inspectable criteria |
 | Built | a keyboard-driven operator tool, Express + React |
-| Configured for | 5 processes — **484 pending records, 242 drafted** |
+| Configured for | 5 processes — **222 of 325 in-scope executions drafted (68%)** |
 | Measured accuracy | **99.5%** of drafted comments match what the operator actually wrote |
 
 ---
@@ -229,19 +229,37 @@ comment the operator would otherwise type, and says what it cannot decide.
 
 ## Results
 
-**484 pending records across 5 configured processes; 242 drafted (50%).**
+Two different populations get reported, and they answer different questions.
+Both appear below rather than picking whichever is flattering.
+
+### The outstanding queue — what the tool would do next
+
+**486 pending records across 5 configured processes; 244 drafted (50%).**
 
 | process | pending | drafted | needs a person |
 |---|---|---|---|
-| `hr_expense_settlement` | 213 | 84 | 129 (種別 = 調整) |
+| `hr_expense_settlement` | 214 | 85 | 129 (種別 = 調整) |
 | `fin_invoice_matching` | 86 | 54 | 32 (種別 = 調整) |
 | `inv_contract_management` | 64 | 64 | — |
 | `hr_leave_application` | 40 | 40 | — |
-| `fin_purchase_order_management` | 81 | **0** | 81 |
+| `fin_purchase_order_management` | 82 | **1** | 81 |
 
 `fin_purchase_order_management` is kept in scope deliberately at rank #11. It
 costs one config entry and is the honest demonstration that the tool fails
-visibly: 81 records, none drafted, each stating why.
+visibly — 81 records stating exactly which field is missing, alongside the one
+record whose detail pane *was* captured, which drafts correctly and proves the
+fetch would unblock the rest.
+
+### The work that actually happened — what it would have done
+
+Coverage measured against the 601 recovered executions rather than a snapshot
+of whatever happened to be outstanding: **222 of 325 in-scope executions
+drafted (68%)**, 35 routed to a person as exceptions, 68 awaiting the specified
+fetch. Full breakdown in [`FINAL_REPORT.md`](FINAL_REPORT.md) §3.
+
+The two figures differ because the populations differ — the pending queue
+carries a higher share of 調整 records than the operators actually worked
+during the recording. Neither is the "real" number on its own.
 
 ### Measured accuracy
 
