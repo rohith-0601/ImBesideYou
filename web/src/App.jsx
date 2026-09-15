@@ -167,6 +167,11 @@ export default function App() {
       } else if (e.key === 'e' || e.key === 'E') {
         e.preventDefault()
         if (current?.comment) setEditing((v) => !v)
+      } else if (e.key === 'Escape') {
+        // Only meaningful in the drawer layout, where the detail pane covers
+        // the queue. Harmless above that breakpoint, where the pane is always
+        // visible and `drawerOpen` is inert.
+        setDrawerOpen(false)
       }
     }
     window.addEventListener('keydown', onKey)

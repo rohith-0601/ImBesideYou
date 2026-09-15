@@ -1280,3 +1280,63 @@ Claude Code (Opus 5): the drawer implementation and the packaging pass. The
 narrow-layout hole and the cascade bug were both found by rendering the app at
 different widths and looking at the screenshots — the same "run it and
 disbelieve it" pattern that produced most of this week's findings.
+
+---
+
+## Day 7 (continued) — driving the UI, not just looking at it
+
+### The bug that prompted it
+
+Rohith reported the screen going blurry on click. It was the drawer scrim:
+I had declared it as a base CSS rule instead of inside the `max-width: 1100px`
+breakpoint it belongs to, so on a laptop **selecting any record dimmed the
+entire page** — and because the detail pane's `z-index: 40` is also declared
+only inside that breakpoint, on wide screens the pane had no stacking context
+and sat *underneath* the scrim.
+
+This was the second bug from one change. Moving the responsive block to the end
+of the stylesheet fixed a cascade problem at phone width and left `.scrim`
+outside its breakpoint. Both were invisible except at a specific viewport.
+
+### Why screenshots were no longer enough
+
+Five UI bugs this week, all found by rendering rather than reading: the inline
+row layout, the heading that told operators a ready record needed attention,
+sidebar counts that only rendered for the open queue, the detail pane
+vanishing below 1100px, and now the scrim. Screenshots caught four. **The
+fifth needed a click**, and nothing in my setup could click.
+
+So I added `web/e2e.mjs` — puppeteer-core driving the system Chrome through
+17 checks: select a record, approve it, confirm the count decrements and the
+audit trail fills, exercise `J`/`K`/`E`, then check the drawer at narrow width
+and the tab layout on a phone.
+
+### It immediately caught something I had claimed was done
+
+**`Escape` did not close the drawer.** The handler branch was missing entirely
+— an earlier patch had failed silently on a whitespace mismatch, and I never
+verified it. I had written "Esc to dismiss" in the work log *and* in a commit
+message for a feature that did not exist in the code.
+
+That is the most useful thing the suite could have found on its first run: not
+a subtle regression, but a documented feature that was never wired. Fixed;
+17/17 now.
+
+### Two design notes
+
+**The first version started its own servers and failed with no output.** A test
+that spawns its own stack fails for reasons unrelated to what it is testing. It
+now requires the stack to be running and says how to start it, on spare ports
+(8791/5191) so it cannot disturb a dev server someone already has open.
+
+**Request interception rather than a second proxy config.** Vite proxies
+`/api` to 8765; the test runs the API on 8791. Rewriting the request in the
+browser keeps the app's own configuration untouched, so the test exercises the
+shipped setup rather than a special one.
+
+### Generative AI usage
+
+Claude Code (Opus 5): the scrim fix and the e2e suite. The scrim bug was
+reported by Rohith, not found by me — I had checked phone and narrow widths
+after the drawer change and never re-checked laptop, which is the width the
+bug lived at.

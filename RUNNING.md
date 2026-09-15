@@ -107,3 +107,25 @@ interface: `MockPortalClient` (real records, real state machine, in memory)
 and `HttpPortalClient`, whose methods throw with the specific question each
 one needs answered against a live instance. Swapping them is the only change
 required once someone can reach a running system.
+
+## Tests
+
+**Drafting logic** — `cd server && npm test` (12 tests). Covers the branches the
+replay in `src/replay.py` cannot reach: 要注意 urgency appears in seven
+completion comments and no captured detail pane, and the refusal paths are by
+definition things operators never did.
+
+**End-to-end UI** — `cd web && npm run e2e` (17 checks). Drives a real browser:
+selects a record, approves it, uses the keyboard, and checks the drawer and
+phone layouts. It needs the stack already running, on spare ports so it cannot
+disturb a dev server you have open:
+
+```bash
+cd server && PORT=8791 npm start
+cd web    && npx vite --port 5191 --strictPort
+cd web    && npm run e2e
+```
+
+Every UI bug in this project was found by rendering the app rather than reading
+the code, and the last one — `Escape` not closing the drawer — needed a click,
+which screenshots could not provide.
