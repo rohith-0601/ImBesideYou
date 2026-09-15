@@ -549,11 +549,11 @@ kbd {
   color: var(--accent); border-bottom-color: var(--accent); font-weight: 600;
 }
 
-.scrim {
-  position: fixed; inset: 0; z-index: 35;
-  background: rgba(26, 26, 23, .32);
-  animation: fade 140ms var(--ease);
-}
+/* The scrim belongs to the drawer layout only. Declared as a base rule it
+   dimmed the whole page on a laptop the moment a record was selected - the
+   detail pane's z-index is set inside the breakpoint, so on wide screens the
+   scrim sat on top of everything including the pane it was meant to back. */
+.scrim { display: none; }
 @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
 
 /* Below the three-pane breakpoint the detail becomes a drawer rather than
@@ -574,6 +574,13 @@ kbd {
   }
   .shell .detail-pane.is-open { transform: none; }
   .drawer-close { display: inline-flex; }
+
+  .scrim {
+    display: block;
+    position: fixed; inset: 0; z-index: 35;
+    background: rgba(26, 26, 23, .32);
+    animation: fade 140ms var(--ease);
+  }
 }
 
 @media (max-width: 620px) {
