@@ -4,7 +4,7 @@
 Indian Institute of Technology, Hyderabad — Engineering Science
 es24btech11026@iith.ac.in
 
-Submission for the FDE intern selection task.
+Submission for the Ai Engineering intern selection task.
 
 **The three required deliverables:**
 
