@@ -224,7 +224,7 @@ and the three processes that cannot be drafted at all now sit last. After Day
 4's correction, **no process in dataset B has judgement exceptions left**:
 every observed branch is decided by a field present before the work starts.
 
-Scope is now five processes, **484 pending / 242 drafted (50%)**. Added
+Scope is now five processes, **486 pending / 244 drafted (50%)**. Added
 `inv_contract_management` (#3). Kept `fin_purchase_order_management` at #11
 deliberately — 81 records, none drafted, each saying why, which is the
 clearest demonstration that unhandled cases fail visibly.

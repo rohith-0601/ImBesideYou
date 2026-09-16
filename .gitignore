@@ -20,6 +20,8 @@ __pycache__/
 *.png
 cache/
 
-# Node / frontend build output
-web/node_modules
-web/dist/
+# Node dependencies and build output.
+# Anchored at web/ originally, which left server/node_modules tracked — 636
+# files that shipped in the repo until a final audit caught them.
+node_modules/
+dist/

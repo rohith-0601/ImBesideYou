@@ -30,8 +30,8 @@ Expected output:
 ```
 portal adapter API on http://127.0.0.1:8765
   fin_invoice_matching: 86 pending
-  fin_purchase_order_management: 81 pending
-  hr_expense_settlement: 213 pending
+  fin_purchase_order_management: 82 pending
+  hr_expense_settlement: 214 pending
   hr_leave_application: 40 pending
   inv_contract_management: 64 pending
 ```
@@ -60,17 +60,23 @@ The review loop runs without the mouse.
   is 種別: `定常` records get 差異なし承認 drafted, `調整` records are routed
   to a human. 種別 predicts the outcome 64/64 in the recorded data and is set
   before the work begins.
-- **経費精算（確認）** — 213 pending, 84 ready, 129 needing review. The 129 are
+- **経費精算（確認）** — 214 pending, 85 ready, 129 needing review. The 129 are
   records whose 種別 is `調整`, which the definition marks as an exception.
 - **契約管理** — 64 pending, all 64 drafted. Every record carries a note: the
   comment asserts 関連書類確認済み and the portal names a `.docx` you are
   expected to open. The tool drafts the sentence; you confirm the document.
-- **発注管理** — 81 pending, **0 drafted**. Its list view does not expose the
-  order type that decides the branch, so the tool cannot classify any of them
-  without a per-record fetch that does not exist yet. This is a real finding,
-  not a bug: see `reports/day4_findings.md` §6 and `day5_findings.md` §2.
+- **発注管理** — 82 pending, **1 drafted**. Its list view does not expose the
+  order type that decides the branch, so 81 of them say exactly which field is
+  missing rather than failing vaguely. The one that drafts is the record whose
+  detail pane was captured in the logs — proof that the specified fetch would
+  unblock the rest. A real finding, not a bug: see `reports/day4_findings.md`
+  §6 and `day5_findings.md` §6–7.
 
-Across all five: **484 pending, 242 drafted (50%)**.
+Across all five: **486 pending, 244 drafted (50%)**.
+
+Measured against the work that actually happened rather than the outstanding
+queue, the figure is **222 of 325 in-scope executions (68%)** — see
+[`FINAL_REPORT.md`](FINAL_REPORT.md) §3.
 
 **Bulk approve** appears above the queue when anything is drafted. It shows
 the count and a sample of the sentence before committing, submits each record

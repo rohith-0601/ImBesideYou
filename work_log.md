@@ -1340,3 +1340,60 @@ Claude Code (Opus 5): the scrim fix and the e2e suite. The scrim bug was
 reported by Rohith, not found by me — I had checked phone and narrow widths
 after the drawer change and never re-checked laptop, which is the width the
 bug lived at.
+
+---
+
+## Final audit
+
+A last pass over what actually ships, rather than over what I remembered
+writing.
+
+### 636 dependency files were in the repository
+
+`git ls-files` showed **705 tracked files, 636 of them `server/node_modules`**.
+They were committed with the first Express work, before the ignore rule
+existed — and `.gitignore` only affects *untracked* files, so adding the rule
+later changed nothing. The repository had been carrying Express and its
+dependency tree ever since.
+
+Removed with `git rm -r --cached`, which untracks without deleting from disk.
+**705 files → 69, 5.4 MB → 1.1 MB.**
+
+Two things worth recording about the fix:
+
+- **The ignore rule was wrong too.** It read `web/node_modules`, anchored to
+  one directory, which is why `server/node_modules` was never covered even for
+  a fresh checkout. Changed to `node_modules/` and `dist/`.
+- **My first attempt silently undid itself.** I ran `git rm --cached`, then
+  `git add -A` while making an unrelated edit — which re-staged all 636,
+  because `add -A` re-stages files already tracked in HEAD regardless of ignore
+  rules. I only caught it because the export I built to verify the fix still
+  contained them. Verifying the fix is what found the fix had not held.
+
+### Verified from the index, not from memory
+
+Exported the staged tree with `git checkout-index` and ran it as a grader
+would: `npm install` (69 packages), `npm test` 12/12, API starts with all five
+queues loaded, front end builds. Nothing tracked that should not be — no
+`node_modules`, no `dist/`, no logs, no `__pycache__`.
+
+### Stale figures
+
+`RUNNING.md` still quoted 484 pending / 242 drafted and showed 発注管理 as
+**0 drafted** — written before the detail-fetch work made it 1, which was that
+work's entire point. Updated to 486 / 244, with a pointer to the 222-of-325
+execution-based figure so the two populations are not confused.
+
+`web/vite.config.js` still described the API as "the Python API
+(src/api_server.py)", a file deleted when the backend moved to Express.
+
+The dated files in `reports/` were deliberately **not** rewritten. They record
+what was known on the day they were written, and revising them to match later
+findings would destroy the one thing they are useful for.
+
+### Generative AI usage
+
+Claude Code (Opus 5): the audit and the fixes. The tracked-dependency problem
+was found by asking what the repository actually contains rather than assuming
+`.gitignore` had done its job — the same disbelieve-the-output habit that
+produced most of this week's findings.
